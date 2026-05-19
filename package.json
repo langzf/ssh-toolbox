@@ -1,0 +1,48 @@
+{
+  "name": "local-webssh",
+  "version": "1.0.0",
+  "description": "本地 macOS SSH 终端（SSH 工具箱）",
+  "main": "main/main.js",
+  "author": "local",
+  "license": "MIT",
+  "scripts": {
+    "start": "env -u ELECTRON_RUN_AS_NODE electron .",
+    "check": "node scripts/check.mjs",
+    "pack": "electron-builder --mac dir"
+  },
+  "dependencies": {
+    "@xterm/addon-fit": "^0.10.0",
+    "@xterm/xterm": "^5.5.0",
+    "electron-store": "^8.2.0",
+    "ssh2": "^1.16.0"
+  },
+  "devDependencies": {
+    "electron": "^34.5.8",
+    "electron-builder": "^25.1.8"
+  },
+  "build": {
+    "appId": "com.local.webssh",
+    "productName": "SSH 工具箱",
+    "executableName": "SSHToolbox",
+    "directories": {
+      "output": "dist"
+    },
+    "mac": {
+      "category": "public.app-category.developer-tools",
+      "target": [
+        {
+          "target": "dir",
+          "arch": [
+            "arm64",
+            "x64"
+          ]
+        }
+      ]
+    },
+    "files": [
+      "main/**/*",
+      "src/**/*",
+      "package.json"
+    ]
+  }
+}

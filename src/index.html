@@ -1,0 +1,216 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>SSH 工具箱</title>
+    <link rel="stylesheet" href="../node_modules/@xterm/xterm/css/xterm.css" />
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <div id="boot-error" class="boot-error hidden"></div>
+
+    <header class="titlebar">
+      <div class="titlebar-drag"></div>
+      <span class="titlebar-title">SSH 工具箱</span>
+    </header>
+
+    <div class="app-shell">
+      <aside class="sidebar">
+        <header class="sidebar-header">
+          <h2 class="sidebar-title">库存</h2>
+          <div class="sidebar-actions">
+            <button type="button" id="btn-help" class="icon-btn" title="帮助" aria-label="帮助">
+              <span class="icon-btn-glyph">?</span>
+            </button>
+            <button type="button" id="btn-settings" class="icon-btn" title="设置" aria-label="设置">
+              <span class="icon-btn-glyph icon-btn-glyph-gear">⚙</span>
+            </button>
+          </div>
+        </header>
+
+        <nav class="inventory-nav">
+          <button type="button" class="nav-item active" data-view="servers">
+            <span class="nav-icon">▣</span>
+            <span class="nav-text">服务器</span>
+            <span id="server-count" class="nav-badge">0</span>
+          </button>
+          <button type="button" class="nav-item" data-view="snippets">
+            <span class="nav-icon">&lt;/&gt;</span>
+            <span class="nav-text">Snippets</span>
+            <span id="snippet-count" class="nav-badge">0</span>
+          </button>
+          <button type="button" class="nav-item disabled" disabled title="后续版本支持">
+            <span class="nav-icon">⇄</span>
+            <span class="nav-text">隧道代理</span>
+          </button>
+        </nav>
+
+        <div class="sidebar-sessions">
+          <p class="section-label sessions-label">会话</p>
+          <ul id="session-list" class="session-list"></ul>
+        </div>
+      </aside>
+
+      <main class="workspace">
+        <div id="session-toolbar" class="session-toolbar hidden">
+          <span id="toolbar-title" class="toolbar-title">—</span>
+          <div class="toolbar-view-switch" role="tablist" aria-label="会话视图">
+            <button type="button" id="btn-pane-terminal" class="toolbar-seg active" data-pane="terminal" role="tab">终端</button>
+            <button type="button" id="btn-pane-sftp" class="toolbar-seg" data-pane="sftp" role="tab">SFTP</button>
+          </div>
+          <div class="toolbar-actions">
+            <button type="button" id="btn-new-tab" class="toolbar-btn" title="新建连接">+</button>
+            <button type="button" id="btn-disconnect" class="toolbar-btn" title="断开">⏻</button>
+          </div>
+        </div>
+        <div id="tab-bar" class="tab-bar hidden"></div>
+
+        <section id="servers-browser" class="main-panel servers-browser" aria-label="服务器">
+          <header class="main-panel-header">
+            <h2>服务器</h2>
+            <button type="button" id="btn-new" class="btn-icon-action" title="新建服务器">⊞+</button>
+          </header>
+          <div class="search-bar">
+            <input id="server-search" type="search" placeholder="搜索已保存的服务器…" autocomplete="off" />
+          </div>
+          <ul id="servers-browser-list" class="servers-browser-list"></ul>
+        </section>
+
+        <section id="snippets-browser" class="main-panel snippets-browser hidden" aria-label="Snippets">
+          <header class="main-panel-header">
+            <h2>Snippets</h2>
+            <button type="button" id="btn-new-snippet" class="btn-icon-action" title="新建片段">+</button>
+          </header>
+          <ul id="snippet-list" class="servers-browser-list"></ul>
+        </section>
+
+        <div id="welcome" class="welcome hidden">
+          <div class="welcome-icon">&gt;_</div>
+          <h2>暂无服务器</h2>
+          <p>点击右上角新建，保存后单击卡片即可连接。</p>
+          <button type="button" id="btn-welcome-connect" class="btn-primary">新建服务器</button>
+        </div>
+
+        <div id="session-panels" class="session-panels hidden"></div>
+      </main>
+    </div>
+
+    <div id="toast" class="toast hidden" role="status"></div>
+
+    <dialog id="connect-dialog" class="connect-dialog">
+      <form id="connect-form">
+        <header class="dialog-header">
+          <h2 id="dialog-title">服务器</h2>
+          <button type="button" id="dialog-close" class="btn-icon" aria-label="关闭">×</button>
+        </header>
+
+        <div class="form-grid">
+          <label>
+            显示名称
+            <input name="label" type="text" placeholder="可选，默认同主机名" autocomplete="off" />
+          </label>
+          <label></label>
+          <label>
+            主机名
+            <input name="host" type="text" placeholder="127.0.0.1" required autocomplete="off" />
+          </label>
+          <label>
+            端口
+            <input name="port" type="number" value="22" min="1" max="65535" />
+          </label>
+          <label>
+            用户名
+            <input name="username" type="text" required autocomplete="username" />
+          </label>
+          <label>
+            密码
+            <input name="password" type="password" autocomplete="current-password" />
+          </label>
+          <label class="span-2">
+            私钥路径
+            <div class="input-with-btn">
+              <input name="privateKeyPath" type="text" placeholder="留空则尝试 %USERPROFILE%\.ssh\id_ed25519" autocomplete="off" />
+              <button type="button" id="btn-pick-key" class="btn-secondary">浏览…</button>
+            </div>
+          </label>
+          <label>
+            私钥口令
+            <input name="passphrase" type="password" autocomplete="off" />
+          </label>
+          <label class="checkbox-label span-2">
+            <input name="rememberPassword" type="checkbox" checked />
+            记住密码（加密保存在本机钥匙串）
+          </label>
+        </div>
+
+        <p id="form-error" class="form-error" role="alert"></p>
+
+        <footer class="dialog-footer">
+          <button type="button" id="btn-delete" class="btn-danger hidden">删除</button>
+          <div class="dialog-footer-right">
+            <button type="button" id="btn-cancel" class="btn-secondary">取消</button>
+            <button type="button" id="btn-save-only" class="btn-secondary">保存</button>
+            <button type="submit" id="btn-connect" class="btn-primary">连接</button>
+          </div>
+        </footer>
+      </form>
+    </dialog>
+
+    <dialog id="snippet-dialog" class="connect-dialog">
+      <form id="snippet-form">
+        <header class="dialog-header">
+          <h2>命令片段</h2>
+          <button type="button" id="snippet-dialog-close" class="btn-icon">×</button>
+        </header>
+        <div class="form-grid">
+          <label class="span-2">
+            名称
+            <input name="name" type="text" required />
+          </label>
+          <label class="span-2">
+            命令
+            <input name="command" type="text" required placeholder="例如: htop" />
+          </label>
+        </div>
+        <footer class="dialog-footer">
+          <button type="button" id="snippet-cancel" class="btn-secondary">取消</button>
+          <button type="submit" class="btn-primary">保存</button>
+        </footer>
+      </form>
+    </dialog>
+
+    <dialog id="settings-dialog" class="connect-dialog">
+      <form id="settings-form">
+        <header class="dialog-header">
+          <h2>设置</h2>
+          <button type="button" id="settings-close" class="btn-icon">×</button>
+        </header>
+        <div class="form-grid">
+          <label>
+            默认 SSH 端口
+            <input name="defaultPort" type="number" min="1" max="65535" />
+          </label>
+          <label>
+            终端字号
+            <input name="fontSize" type="number" min="10" max="24" />
+          </label>
+          <label class="span-2">
+            外观主题
+            <select name="themeId" id="settings-theme"></select>
+          </label>
+        </div>
+        <footer class="dialog-footer">
+          <button type="button" id="settings-cancel" class="btn-secondary">取消</button>
+          <button type="submit" class="btn-primary">保存</button>
+        </footer>
+      </form>
+    </dialog>
+
+    <script src="themes.js"></script>
+    <script src="sftp-ui.js"></script>
+    <script src="../node_modules/@xterm/xterm/lib/xterm.js"></script>
+    <script src="../node_modules/@xterm/addon-fit/lib/addon-fit.js"></script>
+    <script src="renderer.js"></script>
+  </body>
+</html>

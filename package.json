@@ -1,0 +1,56 @@
+{
+  "name": "local-webssh-windows",
+  "version": "1.0.0",
+  "description": "本地 Windows SSH 终端（SSH 工具箱）",
+  "main": "main/main.js",
+  "author": "local",
+  "license": "MIT",
+  "scripts": {
+    "start": "electron .",
+    "check": "node scripts/check.mjs",
+    "pack": "electron-builder --win nsis",
+    "pack:dir": "electron-builder --win dir"
+  },
+  "dependencies": {
+    "@xterm/addon-fit": "^0.10.0",
+    "@xterm/xterm": "^5.5.0",
+    "electron-store": "^8.2.0",
+    "ssh2": "^1.16.0"
+  },
+  "devDependencies": {
+    "electron": "^34.5.8",
+    "electron-builder": "^25.1.8"
+  },
+  "build": {
+    "appId": "com.local.webssh.windows",
+    "productName": "SSH 工具箱",
+    "executableName": "SSHToolbox",
+    "directories": {
+      "output": "dist"
+    },
+    "win": {
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64",
+            "arm64"
+          ]
+        }
+      ]
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "installerLanguages": [
+        "zh_CN",
+        "en_US"
+      ]
+    },
+    "files": [
+      "main/**/*",
+      "src/**/*",
+      "package.json"
+    ]
+  }
+}

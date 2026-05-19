@@ -12,11 +12,14 @@ Windows 桌面 SSH 客户端（Electron），支持多会话终端、SFTP 文件
 ## 快速开始
 
 ```powershell
-git clone https://github.com/langzf/ssh-toolbox-windows.git
+git clone --branch windows --single-branch https://github.com/langzf/ssh-toolbox.git ssh-toolbox-windows
 cd ssh-toolbox-windows
 npm install
 npm start
 ```
+
+> 仓库地址：https://github.com/langzf/ssh-toolbox/tree/windows  
+> 若已单独创建 `ssh-toolbox-windows` 仓库，可将 `origin` 改为该地址后 `git push`。
 
 也可双击或在命令提示符中运行项目根目录的 `start.bat`。
 

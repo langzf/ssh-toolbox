@@ -2,7 +2,7 @@
 
 本文说明如何从 GitHub 克隆 **SSH 工具箱（Windows 版）**（`ssh-toolbox-windows`），在 Windows 上完成安装、运行与可选打包。
 
-- 仓库地址：https://github.com/langzf/ssh-toolbox-windows  
+- 仓库地址：https://github.com/langzf/ssh-toolbox/tree/windows（分支 `windows`）  
 - 适用系统：**Windows 10 / 11（64 位）**
 
 ---
@@ -49,7 +49,7 @@ npm --version
 
 ```powershell
 cd D:\dev
-git clone https://github.com/langzf/ssh-toolbox-windows.git
+git clone --branch windows --single-branch https://github.com/langzf/ssh-toolbox.git ssh-toolbox-windows
 cd ssh-toolbox-windows
 ```
 
@@ -170,9 +170,9 @@ npm run pack:dir
 
 ## 八、与 macOS 版的关系
 
-| | macOS 版 (`ssh-toolbox`) | Windows 版 (`ssh-toolbox-windows`) |
+| | macOS 版 (`main` 分支) | Windows 版 (`windows` 分支) |
 |---|--------------------------|-------------------------------------|
-| 仓库 | https://github.com/langzf/ssh-toolbox | https://github.com/langzf/ssh-toolbox-windows |
+| 仓库 | https://github.com/langzf/ssh-toolbox | https://github.com/langzf/ssh-toolbox/tree/windows |
 | 启动 | `./start.sh` 或 `npm start` | `start.bat` 或 `npm start` |
 | 打包 | `.app`（mac-arm64） | `.exe`（NSIS） |
 

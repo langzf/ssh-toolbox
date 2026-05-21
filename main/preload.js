@@ -34,4 +34,5 @@ contextBridge.exposeInMainWorld('localWebSSH', {
   sftpDownload: (sessionId, remotePath, fileName) =>
     ipcRenderer.invoke('sftp-download', { sessionId, remotePath, fileName }),
   sftpUpload: (sessionId, remoteDir) => ipcRenderer.invoke('sftp-upload', { sessionId, remoteDir }),
+  fetchMetrics: (sessionId) => ipcRenderer.invoke('metrics-fetch', { sessionId }),
 });

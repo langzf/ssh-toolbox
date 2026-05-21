@@ -2,14 +2,26 @@
 
 macOS 桌面 SSH 客户端（Electron），支持多会话终端、SFTP 文件传输、保存主机与 Snippets。
 
-📖 **从 Git 克隆并本地部署的完整步骤** → [docs/本地部署手册.md](docs/本地部署手册.md)
+📖 **Git 克隆部署** → [docs/本地部署手册.md](docs/本地部署手册.md)  
+📦 **npm 安装（推荐给他人）** → [docs/npm安装说明.md](docs/npm安装说明.md)
 
 ## 环境要求
 
 - macOS 12+
 - Node.js 18+
 
-## 快速开始
+## 快速开始（npm，发布后可用）
+
+```bash
+npm install -g ssh-toolbox
+ssh-toolbox
+```
+
+或无需全局安装：`npx ssh-toolbox`
+
+> 首次安装会下载 Electron（约 150MB+）。仅支持 macOS。
+
+## 从源码运行
 
 ```bash
 git clone https://github.com/langzf/ssh-toolbox.git
@@ -39,6 +51,7 @@ npm run pack
 - 保存服务器、密码（本机钥匙串加密）
 - SSH 终端（xterm）
 - SFTP：浏览、上传、下载、新建文件夹、删除
+- **监控**：CPU、内存、磁盘、负载；NVIDIA GPU（需 `nvidia-smi`）
 - 多主题、多标签会话
 
 ## 项目结构

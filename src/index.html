@@ -58,9 +58,10 @@
           <div class="toolbar-view-switch" role="tablist" aria-label="会话视图">
             <button type="button" id="btn-pane-terminal" class="toolbar-seg active" data-pane="terminal" role="tab">终端</button>
             <button type="button" id="btn-pane-sftp" class="toolbar-seg" data-pane="sftp" role="tab">SFTP</button>
+            <button type="button" id="btn-pane-monitor" class="toolbar-seg" data-pane="monitor" role="tab">监控</button>
           </div>
           <div class="toolbar-actions">
-            <button type="button" id="btn-new-tab" class="toolbar-btn" title="新建连接">+</button>
+            <button type="button" id="btn-new-tab" class="toolbar-btn" title="对当前服务器新建会话">+</button>
             <button type="button" id="btn-disconnect" class="toolbar-btn" title="断开">⏻</button>
           </div>
         </div>
@@ -209,6 +210,7 @@
 
     <script src="themes.js"></script>
     <script src="sftp-ui.js"></script>
+    <script src="monitor-ui.js"></script>
     <script src="../node_modules/@xterm/xterm/lib/xterm.js"></script>
     <script src="../node_modules/@xterm/addon-fit/lib/addon-fit.js"></script>
     <script src="renderer.js"></script>

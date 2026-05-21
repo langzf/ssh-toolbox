@@ -1,14 +1,48 @@
 {
-  "name": "local-webssh",
-  "version": "1.0.0",
-  "description": "本地 macOS SSH 终端（SSH 工具箱）",
+  "name": "ssh-toolbox",
+  "version": "1.2.0",
+  "description": "macOS 桌面 SSH 客户端：终端、SFTP、CPU/内存/GPU 监控",
   "main": "main/main.js",
-  "author": "local",
+  "author": "langzf",
   "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/langzf/ssh-toolbox.git"
+  },
+  "homepage": "https://github.com/langzf/ssh-toolbox#readme",
+  "bugs": {
+    "url": "https://github.com/langzf/ssh-toolbox/issues"
+  },
+  "keywords": [
+    "ssh",
+    "sftp",
+    "terminal",
+    "electron",
+    "macos",
+    "monitoring"
+  ],
+  "os": [
+    "darwin"
+  ],
+  "engines": {
+    "node": ">=18"
+  },
+  "bin": {
+    "ssh-toolbox": "./bin/ssh-toolbox.js"
+  },
+  "files": [
+    "bin/",
+    "main/",
+    "src/",
+    "docs/",
+    "LICENSE",
+    "README.md"
+  ],
   "scripts": {
     "start": "env -u ELECTRON_RUN_AS_NODE electron .",
     "check": "node scripts/check.mjs",
-    "pack": "electron-builder --mac dir"
+    "pack": "electron-builder --mac dir",
+    "prepublishOnly": "npm run check"
   },
   "dependencies": {
     "@xterm/addon-fit": "^0.10.0",
@@ -17,11 +51,10 @@
     "ssh2": "^1.16.0"
   },
   "devDependencies": {
-    "electron": "^34.5.8",
     "electron-builder": "^25.1.8"
   },
   "build": {
-    "appId": "com.local.webssh",
+    "appId": "com.langzf.ssh-toolbox",
     "productName": "SSH 工具箱",
     "executableName": "SSHToolbox",
     "directories": {

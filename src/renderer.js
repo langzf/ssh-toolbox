@@ -20,6 +20,9 @@ function bootCheck() {
   if (!window.LocalWebSSHSftp) {
     errors.push('sftp-ui.js 未加载。');
   }
+  if (!window.LocalWebSSHMonitor) {
+    errors.push('monitor-ui.js 未加载。');
+  }
   try {
     createFitAddon();
   } catch (e) {
@@ -50,6 +53,7 @@ const els = {
   sessionPanels: document.getElementById('session-panels'),
   btnPaneTerminal: document.getElementById('btn-pane-terminal'),
   btnPaneSftp: document.getElementById('btn-pane-sftp'),
+  btnPaneMonitor: document.getElementById('btn-pane-monitor'),
   welcome: document.getElementById('welcome'),
   sessionToolbar: document.getElementById('session-toolbar'),
   toolbarTitle: document.getElementById('toolbar-title'),
@@ -83,6 +87,7 @@ let workspaceMode = 'servers';
 let serverSearchQuery = '';
 let toastTimer = null;
 const sftpUi = window.LocalWebSSHSftp;
+const monitorUi = window.LocalWebSSHMonitor;
 
 const readonlyConnectFields = ['host', 'port', 'username', 'label'];
 
@@ -195,24 +200,29 @@ function formDataFromEntry(entry, extra = {}) {
   return fd;
 }
 
-function findSessionByServerId(serverId) {
-  for (const [sessionId, session] of sessions) {
-    if (session.savedId === serverId) return sessionId;
+function countSessionsForServer(serverId) {
+  if (!serverId) return 0;
+  let n = 0;
+  for (const s of sessions.values()) {
+    if (s.savedId === serverId) n += 1;
   }
-  return null;
+  return n;
+}
+
+function allocateSessionOrdinal(savedId) {
+  return countSessionsForServer(savedId) + 1;
+}
+
+function formatSessionTitle(baseLabel, ordinal) {
+  if (!ordinal || ordinal <= 1) return baseLabel;
+  return `${baseLabel} (${ordinal})`;
 }
 
 async function connectToServer(item) {
   if (!item) return;
 
-  const existingSessionId = findSessionByServerId(item.id);
-  if (existingSessionId) {
-    setActiveSession(existingSessionId);
-    showToast(`已切换到 ${item.label || item.host}`, 'info', 2000);
-    return;
-  }
-
   editingConnectionId = item.id;
+  selectedServerId = item.id;
 
   let cred = null;
   try {
@@ -251,7 +261,9 @@ function sessionLabelFromEntry(entry) {
 function getSessionDisplayName(session) {
   if (session.savedId) {
     const s = savedConnections.find((c) => c.id === session.savedId);
-    if (s) return sessionLabelFromEntry(s);
+    if (s) {
+      return formatSessionTitle(sessionLabelFromEntry(s), session.sessionOrdinal);
+    }
   }
   return session.title;
 }
@@ -272,6 +284,7 @@ function applySessionLabel(session, sessionId) {
   if (!session) return;
   const label = getSessionDisplayName(session);
   session.title = label;
+  if (session.tab) session.tab.dataset.ordinal = String(session.sessionOrdinal || 1);
   const tabLabel = session.tab?.querySelector('.tab-label');
   if (tabLabel) tabLabel.textContent = label;
   if (sessionId === activeSessionId) {
@@ -375,15 +388,21 @@ function renderServersBrowser() {
     return;
   }
   for (const item of items) {
+    const liveCount = countSessionsForServer(item.id);
     const li = document.createElement('li');
-    li.className = `browser-card${findSessionByServerId(item.id) ? ' live' : ''}`;
+    li.className = `browser-card${liveCount ? ' live' : ''}`;
     li.innerHTML = `
       <div class="browser-card-body">
         <div class="browser-card-title">${escapeHtml(item.label || item.host)}</div>
-        <div class="browser-card-sub">${escapeHtml(item.host)}</div>
+        <div class="browser-card-sub">${escapeHtml(item.host)}${liveCount ? ` · ${liveCount} 个会话` : ''}</div>
       </div>
+      <button type="button" class="browser-card-new" title="新建会话">+</button>
       <button type="button" class="browser-card-edit" title="编辑">✎</button>
     `;
+    li.querySelector('.browser-card-new').addEventListener('click', (e) => {
+      e.stopPropagation();
+      connectToServer(item);
+    });
     li.querySelector('.browser-card-edit').addEventListener('click', (e) => {
       e.stopPropagation();
       openDialogEdit(item);
@@ -457,22 +476,32 @@ function updateWorkspaceVisibility() {
 function setSessionPane(sessionId, pane) {
   const session = sessions.get(sessionId);
   if (!session) return;
-  session.viewPane = pane === 'sftp' ? 'sftp' : 'terminal';
 
-  const isTerminal = session.viewPane === 'terminal';
-  session.panel.classList.toggle('active', isTerminal);
-  session.sftpPanel.classList.toggle('active', !isTerminal);
+  const valid = ['terminal', 'sftp', 'monitor'];
+  session.viewPane = valid.includes(pane) ? pane : 'terminal';
 
-  els.btnPaneTerminal?.classList.toggle('active', isTerminal);
-  els.btnPaneSftp?.classList.toggle('active', !isTerminal);
+  if (session.viewPane !== 'monitor' && session.monitorStop) {
+    session.monitorStop();
+  }
 
-  if (!isTerminal) {
+  const p = session.viewPane;
+  session.panel.classList.toggle('active', p === 'terminal');
+  session.sftpPanel.classList.toggle('active', p === 'sftp');
+  session.monitorPanel.classList.toggle('active', p === 'monitor');
+
+  els.btnPaneTerminal?.classList.toggle('active', p === 'terminal');
+  els.btnPaneSftp?.classList.toggle('active', p === 'sftp');
+  els.btnPaneMonitor?.classList.toggle('active', p === 'monitor');
+
+  if (p === 'sftp') {
     if (!session.sftpReady) {
       session.sftpReady = true;
       session.sftpInit();
     } else {
       session.sftpRefresh();
     }
+  } else if (p === 'monitor') {
+    session.monitorStart();
   } else {
     requestAnimationFrame(() => {
       session.resize();
@@ -563,6 +592,8 @@ function setActiveSession(sessionId) {
     } else {
       s.panel.classList.remove('active');
       s.sftpPanel.classList.remove('active');
+      s.monitorPanel.classList.remove('active');
+      s.monitorStop?.();
     }
   }
   renderServersBrowser();
@@ -578,6 +609,8 @@ async function teardownSession(sessionId) {
   session.term.dispose();
   session.panel.remove();
   session.sftpPanel.remove();
+  session.monitorStop?.();
+  session.monitorPanel.remove();
   session.tab.remove();
   sessions.delete(sessionId);
   if (activeSessionId === sessionId) activeSessionId = null;
@@ -608,7 +641,9 @@ async function startConnection(formData, options = {}) {
     return false;
   }
 
-  const displayName = sessionLabelFromEntry(entry);
+  const savedId = editingConnectionId || entry.id;
+  const sessionOrdinal = allocateSessionOrdinal(savedId);
+  const displayName = formatSessionTitle(sessionLabelFromEntry(entry), sessionOrdinal);
   let terminal;
   try {
     terminal = createTerminal(sessionId);
@@ -619,19 +654,26 @@ async function startConnection(formData, options = {}) {
   }
   const tab = createTab(sessionId, displayName);
   const sftp = sftpUi.createSftpPanel(sessionId, api, showToast);
+  const monitor = monitorUi.createMonitorPanel(sessionId, api, showToast);
   els.sessionPanels.appendChild(sftp.panel);
+  els.sessionPanels.appendChild(monitor.panel);
 
   sessions.set(sessionId, {
     ...terminal,
     tab,
     title: displayName,
-    savedId: editingConnectionId,
+    savedId,
+    sessionOrdinal,
     meta: config,
     viewPane: 'terminal',
     sftpPanel: sftp.panel,
     sftpInit: sftp.init,
     sftpRefresh: sftp.refresh,
     sftpReady: false,
+    monitorPanel: monitor.panel,
+    monitorStart: monitor.start,
+    monitorStop: monitor.stop,
+    monitorRefresh: monitor.refresh,
   });
 
   updateWorkspaceVisibility();
@@ -662,7 +704,7 @@ async function startConnection(formData, options = {}) {
     await persistCredentialFromForm(formData, entry.id);
 
     closeDialog();
-    showToast(`已连接 ${sessionLabelFromEntry(entry)}`, 'success');
+    showToast(`已连接 ${displayName}`, 'success');
     renderServersBrowser();
     return true;
   } catch (err) {
@@ -741,7 +783,12 @@ els.btnDelete.addEventListener('click', async () => {
 
 document.getElementById('btn-new').addEventListener('click', () => openDialog({}, 'edit'));
 document.getElementById('btn-welcome-connect').addEventListener('click', () => openDialog({}, 'edit'));
-document.getElementById('btn-new-tab').addEventListener('click', () => openDialog({}, 'edit'));
+document.getElementById('btn-new-tab').addEventListener('click', () => {
+  const serverId = selectedServerId || sessions.get(activeSessionId)?.savedId;
+  const item = savedConnections.find((c) => c.id === serverId);
+  if (item) connectToServer(item);
+  else openDialog({}, 'connect');
+});
 document.getElementById('btn-cancel').addEventListener('click', closeDialog);
 document.getElementById('dialog-close').addEventListener('click', closeDialog);
 document.getElementById('btn-disconnect').addEventListener('click', () => {
@@ -769,7 +816,7 @@ if (els.serverSearch) {
 }
 
 document.getElementById('btn-help').addEventListener('click', () => {
-  showToast('连接后可用「SFTP」传文件；双击文件夹进入；选中文件后可下载', 'info', 5000);
+  showToast('同一服务器可开多个会话：点卡片或 +；侧栏会话切换；工具栏 + 再开新会话', 'info', 5500);
 });
 
 els.btnPaneTerminal?.addEventListener('click', () => {
@@ -778,6 +825,10 @@ els.btnPaneTerminal?.addEventListener('click', () => {
 
 els.btnPaneSftp?.addEventListener('click', () => {
   if (activeSessionId) setSessionPane(activeSessionId, 'sftp');
+});
+
+els.btnPaneMonitor?.addEventListener('click', () => {
+  if (activeSessionId) setSessionPane(activeSessionId, 'monitor');
 });
 
 document.getElementById('btn-settings').addEventListener('click', () => {

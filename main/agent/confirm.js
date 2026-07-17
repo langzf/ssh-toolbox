@@ -2,7 +2,7 @@ const crypto = require('node:crypto');
 
 const CONFIRM_TIMEOUT_MS = 120_000;
 
-function createConfirmManager(getWebContents) {
+function createConfirmManager(getWebContents, { confirmTimeoutMs = CONFIRM_TIMEOUT_MS } = {}) {
   /** @type {Map<string, { resolve: (d: string) => void, timer: NodeJS.Timeout }>} */
   const pending = new Map();
 
@@ -22,7 +22,7 @@ function createConfirmManager(getWebContents) {
         const timer = setTimeout(() => {
           pending.delete(confirmId);
           resolve('deny');
-        }, CONFIRM_TIMEOUT_MS);
+        }, confirmTimeoutMs);
 
         pending.set(confirmId, { resolve, timer });
         const wc = getWebContents?.();

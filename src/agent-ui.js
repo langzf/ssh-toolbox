@@ -23,6 +23,48 @@ function createAgentModule(deps) {
   let sending = false;
   /** @type {Map<string, object>} */
   const pendingConfirms = new Map();
+  /** @type {Map<string, string[]>} FIFO confirmId queue per agent session */
+  const confirmQueues = new Map();
+
+  function sessionKey(agentSessionId) {
+    return agentSessionId || '';
+  }
+
+  function enqueueConfirm(req) {
+    pendingConfirms.set(req.confirmId, req);
+    const key = sessionKey(req.agentSessionId);
+    if (!confirmQueues.has(key)) confirmQueues.set(key, []);
+    confirmQueues.get(key).push(req.confirmId);
+  }
+
+  function dequeueConfirm(confirmId) {
+    pendingConfirms.delete(confirmId);
+    for (const [key, queue] of confirmQueues) {
+      const idx = queue.indexOf(confirmId);
+      if (idx >= 0) {
+        queue.splice(idx, 1);
+        if (!queue.length) confirmQueues.delete(key);
+        return key;
+      }
+    }
+    return null;
+  }
+
+  function frontConfirmForSession(agentSessionId) {
+    const queue = confirmQueues.get(sessionKey(agentSessionId));
+    if (!queue?.length) return null;
+    return pendingConfirms.get(queue[0]) ?? null;
+  }
+
+  function showConfirmForActiveSession() {
+    if (!activeSessionId) {
+      hideConfirmBar();
+      return;
+    }
+    const front = frontConfirmForSession(activeSessionId);
+    if (front) renderConfirmBar(front);
+    else hideConfirmBar();
+  }
 
   function showWorkbench(show) {
     els.browser?.classList.toggle('hidden', show);
@@ -119,12 +161,7 @@ function createAgentModule(deps) {
     showWorkbench(true);
     await loadConnections();
     await renderMessages();
-    for (const req of pendingConfirms.values()) {
-      if (req.agentSessionId === id) {
-        renderConfirmBar(req);
-        break;
-      }
-    }
+    showConfirmForActiveSession();
   }
 
   function riskLabel(level) {
@@ -169,18 +206,21 @@ function createAgentModule(deps) {
       showToast(`确认响应失败: ${err.message}`, 'error');
       return;
     }
-    pendingConfirms.delete(confirmId);
-    if (!pendingConfirms.size) hideConfirmBar();
+    const sessionId = dequeueConfirm(confirmId);
+    if (sessionId === sessionKey(activeSessionId)) {
+      showConfirmForActiveSession();
+    }
   }
 
   function onConfirmRequest(req) {
     if (!req?.confirmId) return;
-    pendingConfirms.set(req.confirmId, req);
+    enqueueConfirm(req);
     if (req.agentSessionId && req.agentSessionId !== activeSessionId) {
       showToast(`会话 ${req.toolName || '工具'} 等待确认`, 'info', 4000);
       return;
     }
-    renderConfirmBar(req);
+    const front = frontConfirmForSession(activeSessionId);
+    if (front?.confirmId === req.confirmId) renderConfirmBar(req);
   }
 
   function renderTargetSelect(session) {

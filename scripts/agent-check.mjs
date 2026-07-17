@@ -184,7 +184,8 @@ if (layer === 1) {
     'main/agent/llm-client.test.js',
     'main/agent/sessions.test.js',
     'main/agent/policy.test.js',
-    'main/agent/runtime.test.js'
+    'main/agent/runtime.test.js',
+    'main/agent/confirm.test.js'
   );
   console.log('L4 OK');
 } else {

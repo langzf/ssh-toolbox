@@ -104,7 +104,7 @@ async function handleToolPolicy(tool, args, requestConfirm, { policyMode, sessio
     reason: confirmReason(tool, args, risk),
   });
 
-  if (userDecision === 'allow-once' || userDecision === 'allow') {
+  if (userDecision === 'allow-once') {
     return { action: 'execute' };
   }
   if (userDecision === 'allow-session') {

@@ -36,6 +36,11 @@ const L3_FILES = [
   'main/agent/tools/sftp-read.js',
 ];
 
+const L4_FILES = [
+  ...L3_FILES,
+  'main/agent/confirm.js',
+];
+
 function parseLayer(argv) {
   const arg = argv.find((a) => a.startsWith('--layer='));
   return arg ? Number(arg.split('=')[1]) : 1;
@@ -110,6 +115,37 @@ function checkL3HtmlIds() {
   }
 }
 
+function checkL4PreloadExports() {
+  const preloadPath = path.join(root, 'main/preload.js');
+  const src = existsSync(preloadPath) ? readFileSync(preloadPath, 'utf8') : '';
+  const required = ['agentConfirmResponse:', 'onAgentConfirmRequest:'];
+  const missing = required.filter((name) => !src.includes(name));
+  if (missing.length) {
+    console.error('Missing L4 preload exports:', missing.join(', '));
+    process.exit(1);
+  }
+}
+
+function checkL4HtmlIds() {
+  const htmlPath = path.join(root, 'src/index.html');
+  const html = existsSync(htmlPath) ? readFileSync(htmlPath, 'utf8') : '';
+  const required = ['agent-confirm-bar'];
+  const missing = required.filter((id) => !html.includes(id));
+  if (missing.length) {
+    console.error('Missing L4 HTML markers:', missing.join(', '));
+    process.exit(1);
+  }
+}
+
+function checkL4Ipc() {
+  const ipcPath = path.join(root, 'main/agent/ipc.js');
+  const src = existsSync(ipcPath) ? readFileSync(ipcPath, 'utf8') : '';
+  if (!src.includes('agent-confirm-response')) {
+    console.error('Missing L4 IPC handler: agent-confirm-response');
+    process.exit(1);
+  }
+}
+
 const layer = parseLayer(process.argv.slice(2));
 
 if (layer === 1) {
@@ -135,6 +171,22 @@ if (layer === 1) {
     'main/agent/runtime.test.js'
   );
   console.log('L3 OK');
+} else if (layer === 4) {
+  checkFiles(L4_FILES);
+  checkPreloadExports();
+  checkL3PreloadExports();
+  checkL4PreloadExports();
+  checkHtmlIds();
+  checkL3HtmlIds();
+  checkL4HtmlIds();
+  checkL4Ipc();
+  runTests(
+    'main/agent/llm-client.test.js',
+    'main/agent/sessions.test.js',
+    'main/agent/policy.test.js',
+    'main/agent/runtime.test.js'
+  );
+  console.log('L4 OK');
 } else {
   console.error(`Unknown or unsupported layer: ${layer}`);
   process.exit(1);

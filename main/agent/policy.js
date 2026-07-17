@@ -1,4 +1,4 @@
-const { RISK } = require('./types');
+const { RISK, POLICY } = require('./types');
 
 const DANGER_PATTERNS = [
   /\brm\s+(-[^\s]*\s+)*-?r[^\s]*/i,
@@ -48,4 +48,25 @@ function classifyCommand(cmd) {
   return RISK.READ;
 }
 
-module.exports = { classifyCommand };
+/** @returns {'auto'|'confirm'|'deny'} */
+function decide(risk, policyMode, sessionAllowSet) {
+  if (sessionAllowSet?.has(risk)) return 'auto';
+
+  const mode = policyMode || POLICY.STANDARD;
+
+  if (mode === POLICY.STRICT) {
+    if (risk === RISK.DANGER) return 'deny';
+    if (risk === RISK.READ) return 'auto';
+    return 'confirm';
+  }
+
+  if (mode === POLICY.RELAXED) {
+    if (risk === RISK.READ || risk === RISK.WRITE) return 'auto';
+    return 'confirm';
+  }
+
+  if (risk === RISK.READ) return 'auto';
+  return 'confirm';
+}
+
+module.exports = { classifyCommand, decide };

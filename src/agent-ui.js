@@ -14,12 +14,15 @@ function createAgentModule(deps) {
     input: document.getElementById('agent-input'),
     sendBtn: document.getElementById('agent-send'),
     deleteBtn: document.getElementById('agent-delete-session'),
+    confirmBar: document.getElementById('agent-confirm-bar'),
   };
 
   let sessions = [];
   let savedConnections = [];
   let activeSessionId = null;
   let sending = false;
+  /** @type {Map<string, object>} */
+  const pendingConfirms = new Map();
 
   function showWorkbench(show) {
     els.browser?.classList.toggle('hidden', show);
@@ -116,6 +119,68 @@ function createAgentModule(deps) {
     showWorkbench(true);
     await loadConnections();
     await renderMessages();
+    for (const req of pendingConfirms.values()) {
+      if (req.agentSessionId === id) {
+        renderConfirmBar(req);
+        break;
+      }
+    }
+  }
+
+  function riskLabel(level) {
+    if (level === 'danger') return '高危';
+    if (level === 'write') return '写操作';
+    return '只读';
+  }
+
+  function hideConfirmBar() {
+    if (!els.confirmBar) return;
+    els.confirmBar.classList.add('hidden');
+    els.confirmBar.innerHTML = '';
+  }
+
+  function renderConfirmBar(req) {
+    if (!els.confirmBar) return;
+    const argsText = JSON.stringify(req.args ?? {}, null, 2);
+    els.confirmBar.classList.remove('hidden');
+    els.confirmBar.innerHTML = `
+      <h3 id="agent-confirm-title" class="agent-confirm-title">需要确认：${escapeHtml(req.toolName || '')}</h3>
+      <p class="agent-confirm-meta">${escapeHtml(req.reason || '')} · 风险：${escapeHtml(riskLabel(req.riskLevel))}</p>
+      <pre class="agent-confirm-args">${escapeHtml(argsText)}</pre>
+      <div class="agent-confirm-actions">
+        <button type="button" class="btn-primary" data-decision="allow-once">允许一次</button>
+        <button type="button" class="btn-secondary" data-decision="allow-session">允许本会话同类</button>
+        <button type="button" class="btn-text" data-decision="deny">拒绝</button>
+      </div>
+    `;
+    els.confirmBar.querySelectorAll('[data-decision]').forEach((btn) => {
+      btn.addEventListener('click', async () => {
+        const decision = btn.getAttribute('data-decision');
+        await respondConfirm(req.confirmId, decision);
+      });
+    });
+    els.confirmBar.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+  }
+
+  async function respondConfirm(confirmId, decision) {
+    try {
+      await api.agentConfirmResponse({ confirmId, decision });
+    } catch (err) {
+      showToast(`确认响应失败: ${err.message}`, 'error');
+      return;
+    }
+    pendingConfirms.delete(confirmId);
+    if (!pendingConfirms.size) hideConfirmBar();
+  }
+
+  function onConfirmRequest(req) {
+    if (!req?.confirmId) return;
+    pendingConfirms.set(req.confirmId, req);
+    if (req.agentSessionId && req.agentSessionId !== activeSessionId) {
+      showToast(`会话 ${req.toolName || '工具'} 等待确认`, 'info', 4000);
+      return;
+    }
+    renderConfirmBar(req);
   }
 
   function renderTargetSelect(session) {
@@ -244,6 +309,7 @@ function createAgentModule(deps) {
     document.getElementById('btn-new-agent-session')?.addEventListener('click', createSession);
     document.getElementById('agent-wb-back')?.addEventListener('click', () => {
       activeSessionId = null;
+      hideConfirmBar();
       showWorkbench(false);
     });
     els.deleteBtn?.addEventListener('click', () => {
@@ -257,6 +323,7 @@ function createAgentModule(deps) {
         sendMessage();
       }
     });
+    api.onAgentConfirmRequest?.(onConfirmRequest);
   }
 
   bindEvents();
@@ -267,6 +334,7 @@ function createAgentModule(deps) {
     isInWorkbench: () => !!activeSessionId,
     leaveWorkbench: () => {
       activeSessionId = null;
+      hideConfirmBar();
       showWorkbench(false);
     },
   };

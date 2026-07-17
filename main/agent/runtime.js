@@ -1,6 +1,6 @@
 const { MAX_CONTENT_LENGTH } = require('./sessions');
 const { RISK } = require('./types');
-const { classifyCommand } = require('./policy');
+const { classifyCommand, decide } = require('./policy');
 
 const WRITE_REFUSAL = '需升级到写操作层（L5）后才可执行写/高危命令';
 
@@ -76,29 +76,43 @@ function effectiveRisk(tool, args) {
   return tool.riskLevel;
 }
 
-async function handleToolPolicy(tool, args, requestConfirm) {
+function confirmReason(tool, args, risk) {
+  if (tool.name === 'server.connect') return '建立 SSH 连接';
+  return `执行工具 ${tool.name}（风险：${risk}）`;
+}
+
+async function handleToolPolicy(tool, args, requestConfirm, { policyMode, sessionAllowSet } = {}) {
   const risk = effectiveRisk(tool, args);
+  const allowSet = sessionAllowSet || new Set();
 
-  if (risk === RISK.READ) return { action: 'execute' };
-
-  if (tool.name === 'server.connect') {
-    const decision = await requestConfirm({
-      toolName: tool.name,
-      riskLevel: risk,
-      args,
-      reason: '建立 SSH 连接',
-    });
-    if (decision === 'allow-once' || decision === 'allow' || decision === 'allow-session') {
-      return { action: 'execute' };
-    }
-    return { action: 'reject', error: '用户拒绝连接' };
-  }
-
-  if (risk === RISK.WRITE || risk === RISK.DANGER) {
+  if ((risk === RISK.WRITE || risk === RISK.DANGER) && tool.name !== 'server.connect') {
     return { action: 'reject', error: WRITE_REFUSAL, riskLevel: risk };
   }
 
-  return { action: 'execute' };
+  const policyAction = decide(risk, policyMode, allowSet);
+
+  if (policyAction === 'auto') return { action: 'execute' };
+
+  if (policyAction === 'deny') {
+    return { action: 'reject', error: '策略拒绝执行该操作', riskLevel: risk };
+  }
+
+  const userDecision = await requestConfirm({
+    toolName: tool.name,
+    riskLevel: risk,
+    args,
+    reason: confirmReason(tool, args, risk),
+  });
+
+  if (userDecision === 'allow-once' || userDecision === 'allow') {
+    return { action: 'execute' };
+  }
+  if (userDecision === 'allow-session') {
+    return { action: 'execute', sessionAllow: risk };
+  }
+
+  const denyMsg = tool.name === 'server.connect' ? '用户拒绝连接' : '用户拒绝';
+  return { action: 'reject', error: denyMsg, riskLevel: risk };
 }
 
 async function runAgentTurn(deps, { agentSessionId, userText }) {
@@ -110,6 +124,7 @@ async function runAgentTurn(deps, { agentSessionId, userText }) {
     apiKey,
     requestConfirm,
     buildContext,
+    sessionAllowSet,
   } = deps;
 
   const session = agentSessions.getSession(agentSessionId);
@@ -173,7 +188,13 @@ async function runAgentTurn(deps, { agentSessionId, userText }) {
         }
 
         const ctx = buildContext(current);
-        const policy = await handleToolPolicy(tool, args, requestConfirm);
+        const policy = await handleToolPolicy(tool, args, requestConfirm, {
+          policyMode: settings.policyMode,
+          sessionAllowSet,
+        });
+        if (policy.sessionAllow && sessionAllowSet) {
+          sessionAllowSet.add(policy.sessionAllow);
+        }
         let execResult;
         if (policy.action === 'reject') {
           execResult = { ok: false, error: policy.error, riskLevel: policy.riskLevel };

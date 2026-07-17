@@ -3,6 +3,7 @@ const { createAgentSessionsModule } = require('./sessions');
 const { chatCompletion } = require('./llm-client');
 const { runAgentTurn } = require('./runtime');
 const { createDefaultRegistry } = require('./tools');
+const { createConfirmManager } = require('./confirm');
 
 const SIMPLE_SYSTEM_PROMPT =
   '你是 SSH 工具箱助手，帮助用户管理 SSH 连接、远程命令与服务器运维。请用简洁清晰的中文回答。';
@@ -11,20 +12,30 @@ function agentSshSessionId(serverId) {
   return `agent-ssh-${serverId}`;
 }
 
-function createRequestConfirmL3() {
-  return async ({ toolName }) => {
-    if (toolName === 'server.connect') return 'allow-once';
-    return 'deny';
-  };
-}
-
 function registerAgentIpc(ipcMain, deps) {
-  const { encryptSecret, decryptSecret, sshSessions, connectSsh, getConnections, getCredential } =
-    deps;
+  const {
+    encryptSecret,
+    decryptSecret,
+    sshSessions,
+    connectSsh,
+    getConnections,
+    getCredential,
+    getWebContents,
+  } = deps;
 
   const agentSettings = createAgentSettingsModule({ encryptSecret, decryptSecret });
   const agentSessions = createAgentSessionsModule();
   const registry = createDefaultRegistry();
+  const confirmManager = createConfirmManager(getWebContents);
+  /** @type {Map<string, Set<string>>} */
+  const sessionAllowSets = new Map();
+
+  function getSessionAllowSet(agentSessionId) {
+    if (!sessionAllowSets.has(agentSessionId)) {
+      sessionAllowSets.set(agentSessionId, new Set());
+    }
+    return sessionAllowSets.get(agentSessionId);
+  }
 
   async function ensureSshSession(serverId) {
     const sessionId = agentSshSessionId(serverId);
@@ -53,7 +64,6 @@ function registerAgentIpc(ipcMain, deps) {
       getConnections,
       agentSession,
       ensureSshSession,
-      requestConfirm: createRequestConfirmL3(),
     };
   }
 
@@ -75,7 +85,18 @@ function registerAgentIpc(ipcMain, deps) {
     agentSessions.setTargets(id, targets)
   );
 
-  ipcMain.handle('agent-sessions-delete', (_event, id) => agentSessions.deleteSession(id));
+  ipcMain.handle('agent-sessions-delete', (_event, id) => {
+    sessionAllowSets.delete(id);
+    return agentSessions.deleteSession(id);
+  });
+
+  ipcMain.handle('agent-confirm-response', (_event, payload) => {
+    const confirmId = payload?.confirmId;
+    const decision = payload?.decision;
+    if (!confirmId || !decision) return { ok: false, error: '缺少 confirmId 或 decision' };
+    const handled = confirmManager.handleResponse({ confirmId, decision });
+    return { ok: handled };
+  });
 
   ipcMain.handle('agent-chat', async (_event, payload) => {
     const settings = agentSettings.getPublicSettings();
@@ -94,6 +115,8 @@ function registerAgentIpc(ipcMain, deps) {
   ipcMain.handle('agent-send', async (_event, { agentSessionId, userText }) => {
     const settings = agentSettings.getPublicSettings();
     const apiKey = agentSettings.getApiKey();
+    const sessionAllowSet = getSessionAllowSet(agentSessionId);
+    const requestConfirm = confirmManager.createRequestConfirm(agentSessionId);
     const result = await runAgentTurn(
       {
         registry,
@@ -101,7 +124,8 @@ function registerAgentIpc(ipcMain, deps) {
         chatCompletion,
         settings,
         apiKey,
-        requestConfirm: createRequestConfirmL3(),
+        requestConfirm,
+        sessionAllowSet,
         buildContext: (agentSession) => buildContext(agentSession),
       },
       { agentSessionId, userText: String(userText || '').trim() }

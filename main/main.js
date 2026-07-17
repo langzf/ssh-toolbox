@@ -323,6 +323,7 @@ registerAgentIpc(ipcMain, {
   connectSsh,
   getConnections: () => store.get('items', []),
   getCredential: getConnectionCredential,
+  getWebContents: () => (mainWindow && !mainWindow.isDestroyed() ? mainWindow.webContents : null),
 });
 
 ipcMain.handle('ssh-disconnect', (_event, sessionId) => {

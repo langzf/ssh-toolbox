@@ -46,4 +46,10 @@ contextBridge.exposeInMainWorld('localWebSSH', {
   agentAppendMessage: (id, msg) => ipcRenderer.invoke('agent-sessions-append-message', { id, msg }),
   agentSetTargets: (id, targets) => ipcRenderer.invoke('agent-sessions-set-targets', { id, targets }),
   agentDeleteSession: (id) => ipcRenderer.invoke('agent-sessions-delete', id),
+  agentConfirmResponse: (payload) => ipcRenderer.invoke('agent-confirm-response', payload),
+  onAgentConfirmRequest: (handler) => {
+    const listener = (_event, payload) => handler(payload);
+    ipcRenderer.on('agent-confirm-request', listener);
+    return () => ipcRenderer.removeListener('agent-confirm-request', listener);
+  },
 });

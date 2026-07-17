@@ -54,6 +54,14 @@ const L6_FILES = [
   'src/styles.css',
 ];
 
+const L7_FILES = [
+  ...L6_FILES,
+  'main/k8s.js',
+  'src/k8s-ui.js',
+  'main/agent/tools/k8s-read.js',
+  'main/agent/tools/k8s-read.test.js',
+];
+
 function checkL6HtmlIds() {
   const htmlPath = path.join(root, 'src/index.html');
   const html = existsSync(htmlPath) ? readFileSync(htmlPath, 'utf8') : '';
@@ -83,6 +91,100 @@ function checkL6Renderer() {
   const missing = required.filter((name) => !src.includes(name));
   if (missing.length) {
     console.error('Missing L6 renderer wiring:', missing.join(', '));
+    process.exit(1);
+  }
+}
+
+function checkL7K8sTools() {
+  const toolsPath = path.join(root, 'main/agent/tools/k8s-read.js');
+  const src = existsSync(toolsPath) ? readFileSync(toolsPath, 'utf8') : '';
+  const required = [
+    'k8s.list_clusters',
+    'k8s.list_namespaces',
+    'k8s.list_pods',
+    'k8s.pod_logs',
+    'k8s.metrics',
+  ];
+  const missing = required.filter((name) => !src.includes(name));
+  if (missing.length) {
+    console.error('Missing L7 k8s tools:', missing.join(', '));
+    process.exit(1);
+  }
+}
+
+function checkL7Main() {
+  const mainPath = path.join(root, 'main/main.js');
+  const src = existsSync(mainPath) ? readFileSync(mainPath, 'utf8') : '';
+  if (!src.includes('registerK8sIpc')) {
+    console.error('Missing L7 main wiring: registerK8sIpc');
+    process.exit(1);
+  }
+  const indexPath = path.join(root, 'main/agent/tools/index.js');
+  const indexSrc = existsSync(indexPath) ? readFileSync(indexPath, 'utf8') : '';
+  if (!indexSrc.includes('createK8sReadTools')) {
+    console.error('Missing L7 registry: createK8sReadTools');
+    process.exit(1);
+  }
+}
+
+function checkL7PreloadExports() {
+  const preloadPath = path.join(root, 'main/preload.js');
+  const src = existsSync(preloadPath) ? readFileSync(preloadPath, 'utf8') : '';
+  const required = ['k8sListClusters:', 'k8sListPods:', 'k8sFetchLogs:', 'k8sFetchMetrics:'];
+  const missing = required.filter((name) => !src.includes(name));
+  if (missing.length) {
+    console.error('Missing L7 preload exports:', missing.join(', '));
+    process.exit(1);
+  }
+}
+
+function checkL7HtmlIds() {
+  const htmlPath = path.join(root, 'src/index.html');
+  const html = existsSync(htmlPath) ? readFileSync(htmlPath, 'utf8') : '';
+  const required = [
+    'data-view="k8s"',
+    'k8s-browser',
+    'k8s-workbench',
+    'k8s-ui.js',
+    'agent-target-type',
+    'agent-k8s-cluster-select',
+  ];
+  const missing = required.filter((id) => !html.includes(id));
+  if (missing.length) {
+    console.error('Missing L7 HTML markers:', missing.join(', '));
+    process.exit(1);
+  }
+}
+
+function checkL7AgentUi() {
+  const uiPath = path.join(root, 'src/agent-ui.js');
+  const src = existsSync(uiPath) ? readFileSync(uiPath, 'utf8') : '';
+  const required = ['agent-k8s-cluster-select', "type: 'k8s'", 'k8sListClusters'];
+  const missing = required.filter((name) => !src.includes(name));
+  if (missing.length) {
+    console.error('Missing L7 agent-ui K8s binding:', missing.join(', '));
+    process.exit(1);
+  }
+}
+
+function checkL7Renderer() {
+  const rendererPath = path.join(root, 'src/renderer.js');
+  const src = existsSync(rendererPath) ? readFileSync(rendererPath, 'utf8') : '';
+  const required = ['LocalWebSSHK8s', 'createK8sModule', 'k8s-workbench'];
+  const missing = required.filter((name) => !src.includes(name));
+  if (missing.length) {
+    console.error('Missing L7 renderer wiring:', missing.join(', '));
+    process.exit(1);
+  }
+}
+
+function checkL7K8sExports() {
+  const k8sPath = path.join(root, 'main/k8s.js');
+  const src = existsSync(k8sPath) ? readFileSync(k8sPath, 'utf8') : '';
+  const required = ['listClusters', 'listNamespaces', 'listPods', 'readPodLogs', 'fetchPodMetrics', 'apiListItems'];
+  const missing = required.filter((name) => !src.includes(name));
+  if (missing.length) {
+    console.error('Missing L7 k8s exports:', missing.join(', '));
     process.exit(1);
   }
 }
@@ -271,6 +373,34 @@ if (layer === 1) {
     'main/agent/confirm.test.js'
   );
   console.log('L6 OK');
+} else if (layer === 7) {
+  checkFiles(L7_FILES);
+  checkPreloadExports();
+  checkL3PreloadExports();
+  checkL4PreloadExports();
+  checkL7PreloadExports();
+  checkHtmlIds();
+  checkL3HtmlIds();
+  checkL4HtmlIds();
+  checkL6HtmlIds();
+  checkL7HtmlIds();
+  checkL6AgentUi();
+  checkL7AgentUi();
+  checkL6Renderer();
+  checkL7Renderer();
+  checkL4Ipc();
+  checkL7Main();
+  checkL7K8sTools();
+  checkL7K8sExports();
+  runTests(
+    'main/agent/llm-client.test.js',
+    'main/agent/sessions.test.js',
+    'main/agent/policy.test.js',
+    'main/agent/runtime.test.js',
+    'main/agent/confirm.test.js',
+    'main/agent/tools/k8s-read.test.js'
+  );
+  console.log('L7 OK');
 } else {
   console.error(`Unknown or unsupported layer: ${layer}`);
   process.exit(1);

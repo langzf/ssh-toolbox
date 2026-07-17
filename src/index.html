@@ -45,6 +45,11 @@
             <span class="nav-text">Agent</span>
             <span id="agent-count" class="nav-badge">0</span>
           </button>
+          <button type="button" class="nav-item" data-view="k8s">
+            <span class="nav-icon">☸</span>
+            <span class="nav-text">K8s</span>
+            <span id="k8s-count" class="nav-badge">0</span>
+          </button>
           <button type="button" class="nav-item disabled" disabled title="后续版本支持">
             <span class="nav-icon">⇄</span>
             <span class="nav-text">隧道代理</span>
@@ -106,10 +111,18 @@
             <button type="button" id="agent-wb-back" class="btn-secondary agent-back-btn">← 对话列表</button>
             <h2 id="agent-wb-title" class="agent-wb-title">新对话</h2>
             <div id="agent-target-bar" class="agent-target-bar">
-              <label for="agent-target-select" class="agent-target-label">目标</label>
+              <label for="agent-target-type" class="agent-target-label">目标</label>
+              <select id="agent-target-type" class="agent-target-select" title="目标类型">
+                <option value="ssh">SSH</option>
+                <option value="k8s">K8s</option>
+              </select>
               <select id="agent-target-select" class="agent-target-select" title="绑定已保存服务器">
                 <option value="">未绑定</option>
               </select>
+              <select id="agent-k8s-cluster-select" class="agent-target-select hidden" title="绑定 K8s 集群">
+                <option value="">未绑定</option>
+              </select>
+              <input id="agent-k8s-namespace" class="agent-target-ns hidden" type="text" placeholder="命名空间(可选)" autocomplete="off" />
             </div>
             <button type="button" id="agent-delete-session" class="btn-text agent-delete-btn" title="删除此对话">删除</button>
           </header>
@@ -119,6 +132,81 @@
             <textarea id="agent-input" rows="3" placeholder="输入消息，Enter 发送，Shift+Enter 换行…"></textarea>
             <button type="button" id="agent-send" class="btn-primary">发送</button>
           </footer>
+        </section>
+
+        <section id="k8s-browser" class="main-panel k8s-browser hidden" aria-label="Kubernetes">
+          <header class="main-panel-header">
+            <h2>Kubernetes</h2>
+            <button type="button" id="btn-new-k8s-cluster" class="btn-icon-action" title="导入集群">+</button>
+          </header>
+          <p class="agent-hint">导入 kubeconfig 后连接集群，浏览命名空间、Pod 日志与指标。</p>
+          <ul id="k8s-cluster-list" class="servers-browser-list"></ul>
+        </section>
+
+        <section id="k8s-workbench" class="k8s-workbench hidden" aria-label="K8s 工作台">
+          <header class="k8s-wb-header">
+            <button type="button" id="k8s-wb-back" class="btn-secondary agent-back-btn">← 集群列表</button>
+            <h2 id="k8s-wb-title" class="k8s-wb-title">集群</h2>
+            <span id="k8s-wb-context" class="k8s-wb-context"></span>
+          </header>
+          <div class="k8s-layout">
+            <aside class="k8s-sidebar">
+              <div class="k8s-list-section">
+                <div class="k8s-list-head">
+                  <h3>命名空间</h3>
+                  <button type="button" id="k8s-refresh-ns" class="btn-text">刷新</button>
+                </div>
+                <ul id="k8s-ns-list" class="k8s-list"></ul>
+              </div>
+              <div class="k8s-list-section">
+                <div class="k8s-list-head">
+                  <h3>Pods</h3>
+                  <button type="button" id="k8s-refresh-pods" class="btn-text">刷新</button>
+                </div>
+                <ul id="k8s-pod-list" class="k8s-list"></ul>
+              </div>
+            </aside>
+            <div class="k8s-main">
+              <div id="k8s-pod-detail" class="k8s-pod-detail hidden">
+                <header class="k8s-pod-head">
+                  <div>
+                    <h3 id="k8s-pod-title">—</h3>
+                    <p id="k8s-pod-meta" class="k8s-muted"></p>
+                  </div>
+                  <label class="k8s-container-label">
+                    容器
+                    <select id="k8s-container-select"></select>
+                  </label>
+                </header>
+                <div class="k8s-pane-tabs" role="tablist">
+                  <button type="button" class="k8s-pane-tab active" data-pane="logs">日志</button>
+                  <button type="button" class="k8s-pane-tab" data-pane="exec">终端</button>
+                  <button type="button" class="k8s-pane-tab" data-pane="metrics">指标</button>
+                </div>
+                <div class="k8s-pane-body">
+                  <div class="k8s-pane-panel">
+                    <div class="k8s-logs-toolbar">
+                      <label>末尾行数 <input id="k8s-log-tail" type="number" value="200" min="10" max="5000" /></label>
+                      <button type="button" id="k8s-logs-refresh" class="btn-secondary">刷新</button>
+                      <button type="button" id="k8s-logs-follow" class="btn-secondary">跟随</button>
+                      <button type="button" id="k8s-logs-stop" class="btn-text">停止</button>
+                    </div>
+                    <pre id="k8s-logs-view" class="k8s-logs-view"></pre>
+                  </div>
+                  <div class="k8s-pane-panel hidden">
+                    <div id="k8s-exec-host" class="k8s-exec-host"></div>
+                  </div>
+                  <div class="k8s-pane-panel hidden">
+                    <div class="k8s-metrics-toolbar">
+                      <button type="button" id="k8s-metrics-refresh" class="btn-secondary">刷新指标</button>
+                    </div>
+                    <div id="k8s-metrics-view" class="k8s-metrics-view"></div>
+                  </div>
+                </div>
+              </div>
+              <p class="empty-hint k8s-select-hint">选择 Pod 查看日志、终端或指标</p>
+            </div>
+          </div>
         </section>
 
         <div id="welcome" class="welcome hidden">
@@ -275,9 +363,49 @@
       </form>
     </dialog>
 
+    <dialog id="k8s-cluster-dialog" class="connect-dialog">
+      <form id="k8s-cluster-form">
+        <header class="dialog-header">
+          <h2 id="k8s-dialog-title">导入集群</h2>
+          <button type="button" id="k8s-dialog-close" class="btn-icon" aria-label="关闭">×</button>
+        </header>
+        <div class="form-grid">
+          <label class="span-2">
+            集群名称
+            <input name="name" type="text" required autocomplete="off" />
+          </label>
+          <label class="span-2">
+            默认上下文
+            <select name="defaultContext" id="k8s-context-select"></select>
+          </label>
+          <label class="span-2">
+            kubeconfig
+            <textarea name="kubeconfigYaml" rows="8" placeholder="粘贴 YAML 或使用下方导入…"></textarea>
+          </label>
+          <div class="span-2">
+            <button type="button" id="k8s-import-file" class="btn-secondary">从文件导入…</button>
+          </div>
+          <label class="span-2">
+            Prometheus 地址（可选，metrics-server 不可用时）
+            <input name="prometheusUrl" type="url" placeholder="http://prometheus:9090" autocomplete="off" />
+          </label>
+        </div>
+        <p id="k8s-form-error" class="form-error" role="alert"></p>
+        <footer class="dialog-footer">
+          <button type="button" id="k8s-btn-delete" class="btn-danger hidden">删除</button>
+          <div class="dialog-footer-right">
+            <button type="button" id="k8s-test-dialog" class="btn-secondary">测试连接</button>
+            <button type="button" id="k8s-cancel" class="btn-secondary">取消</button>
+            <button type="submit" class="btn-primary">保存</button>
+          </div>
+        </footer>
+      </form>
+    </dialog>
+
     <script src="themes.js"></script>
     <script src="sftp-ui.js"></script>
     <script src="monitor-ui.js"></script>
+    <script src="k8s-ui.js"></script>
     <script src="agent-ui.js"></script>
     <script src="../node_modules/@xterm/xterm/lib/xterm.js"></script>
     <script src="../node_modules/@xterm/addon-fit/lib/addon-fit.js"></script>

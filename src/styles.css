@@ -1755,3 +1755,267 @@ body {
 .toast.success {
   background: rgba(34, 134, 58, 0.95);
 }
+
+.agent-target-ns {
+  width: 120px;
+  font-size: 12px;
+  padding: 4px 8px;
+  border-radius: 6px;
+  border: 1px solid var(--btn-secondary-border);
+  background: var(--input-bg);
+  color: var(--dialog-text);
+}
+
+.k8s-workbench {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.k8s-workbench.hidden {
+  display: none !important;
+}
+
+.k8s-wb-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--border-subtle);
+  flex-shrink: 0;
+}
+
+.k8s-wb-title {
+  margin: 0;
+  font-size: 16px;
+}
+
+.k8s-wb-context {
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+.k8s-layout {
+  display: flex;
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.k8s-sidebar {
+  width: 260px;
+  flex-shrink: 0;
+  border-right: 1px solid var(--border-subtle);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.k8s-list-section {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.k8s-list-section:last-child {
+  border-bottom: none;
+}
+
+.k8s-list-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 12px;
+}
+
+.k8s-list-head h3 {
+  margin: 0;
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--text-muted);
+}
+
+.k8s-list {
+  list-style: none;
+  margin: 0;
+  padding: 0 8px 8px;
+  overflow: auto;
+  flex: 1;
+}
+
+.k8s-list-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 8px 10px;
+  border-radius: 8px;
+  cursor: pointer;
+  font-size: 13px;
+}
+
+.k8s-list-item:hover {
+  background: rgba(0, 0, 0, 0.04);
+}
+
+.k8s-list-item.active {
+  background: var(--accent-soft, rgba(0, 102, 204, 0.12));
+}
+
+.k8s-muted {
+  color: var(--text-muted);
+  font-size: 12px;
+}
+
+.k8s-phase {
+  font-size: 11px;
+  padding: 2px 6px;
+  border-radius: 4px;
+}
+
+.k8s-phase-running {
+  background: rgba(34, 134, 58, 0.15);
+  color: #22863a;
+}
+
+.k8s-phase-pending {
+  background: rgba(200, 140, 0, 0.15);
+  color: #9a6700;
+}
+
+.k8s-phase-failed {
+  background: rgba(180, 40, 40, 0.15);
+  color: #b42828;
+}
+
+.k8s-phase-other {
+  background: rgba(0, 0, 0, 0.06);
+}
+
+.k8s-main {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.k8s-pod-detail {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+}
+
+.k8s-pod-detail.hidden {
+  display: none !important;
+}
+
+.k8s-pod-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.k8s-pod-head h3 {
+  margin: 0 0 4px;
+}
+
+.k8s-container-label {
+  font-size: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.k8s-pane-tabs {
+  display: flex;
+  gap: 4px;
+  padding: 8px 16px;
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.k8s-pane-tab {
+  padding: 6px 12px;
+  border-radius: 6px;
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  font-size: 13px;
+}
+
+.k8s-pane-tab.active {
+  background: var(--accent-soft, rgba(0, 102, 204, 0.12));
+  font-weight: 600;
+}
+
+.k8s-pane-body {
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+.k8s-pane-panel {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.k8s-pane-panel.hidden {
+  display: none !important;
+}
+
+.k8s-logs-toolbar,
+.k8s-metrics-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 16px;
+  flex-shrink: 0;
+}
+
+.k8s-logs-view {
+  flex: 1;
+  margin: 0;
+  padding: 12px 16px;
+  overflow: auto;
+  font-family: SF Mono, Menlo, Monaco, monospace;
+  font-size: 12px;
+  white-space: pre-wrap;
+  word-break: break-word;
+  background: rgba(0, 0, 0, 0.03);
+}
+
+.k8s-exec-host {
+  flex: 1;
+  min-height: 200px;
+  padding: 8px;
+}
+
+.k8s-metrics-view {
+  flex: 1;
+  overflow: auto;
+  padding: 12px 16px;
+}
+
+.k8s-metrics-source {
+  font-size: 12px;
+  color: var(--text-muted);
+  margin: 0 0 12px;
+}
+
+.k8s-select-hint {
+  padding: 24px;
+}

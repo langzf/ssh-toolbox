@@ -6,6 +6,7 @@ const { createSshWriteTools } = require('./ssh-write');
 const { createMetricsTool } = require('./metrics-tool');
 const { createSftpReadTools } = require('./sftp-read');
 const { createSftpWriteTools } = require('./sftp-write');
+const { createK8sReadTools } = require('./k8s-read');
 
 function createDefaultRegistry() {
   return createToolRegistry([
@@ -16,6 +17,7 @@ function createDefaultRegistry() {
     [createMetricsTool()],
     createSftpReadTools(),
     createSftpWriteTools(),
+    createK8sReadTools(),
   ]);
 }
 

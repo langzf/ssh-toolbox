@@ -1,7 +1,7 @@
 {
   "name": "ssh-toolbox",
-  "version": "1.2.0",
-  "description": "macOS 桌面 SSH 客户端：终端、SFTP、CPU/内存/GPU 监控",
+  "version": "1.3.0",
+  "description": "macOS 桌面 SSH 客户端：终端、SFTP、监控与 Kubernetes 集群管理",
   "main": "main/main.js",
   "author": "langzf",
   "license": "MIT",
@@ -19,7 +19,9 @@
     "terminal",
     "electron",
     "macos",
-    "monitoring"
+    "monitoring",
+    "kubernetes",
+    "k8s"
   ],
   "os": [
     "darwin"
@@ -28,7 +30,7 @@
     "node": ">=18"
   },
   "bin": {
-    "ssh-toolbox": "./bin/ssh-toolbox.js"
+    "ssh-toolbox": "bin/ssh-toolbox.js"
   },
   "files": [
     "bin/",
@@ -45,12 +47,15 @@
     "prepublishOnly": "npm run check"
   },
   "dependencies": {
+    "@kubernetes/client-node": "^1.4.0",
     "@xterm/addon-fit": "^0.10.0",
     "@xterm/xterm": "^5.5.0",
     "electron-store": "^8.2.0",
-    "ssh2": "^1.16.0"
+    "ssh2": "^1.16.0",
+    "ws": "^8.21.0"
   },
   "devDependencies": {
+    "electron": "^33.4.11",
     "electron-builder": "^25.1.8"
   },
   "build": {

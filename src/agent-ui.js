@@ -354,7 +354,10 @@ function createAgentModule(deps) {
     sessionCount: document.getElementById('agent-count'),
     workbench: document.getElementById('agent-workbench'),
     wbTitle: document.getElementById('agent-wb-title'),
+    targetType: document.getElementById('agent-target-type'),
     targetSelect: document.getElementById('agent-target-select'),
+    k8sClusterSelect: document.getElementById('agent-k8s-cluster-select'),
+    k8sNamespace: document.getElementById('agent-k8s-namespace'),
     messages: document.getElementById('agent-messages'),
     input: document.getElementById('agent-input'),
     sendBtn: document.getElementById('agent-send'),
@@ -364,6 +367,7 @@ function createAgentModule(deps) {
 
   let sessions = [];
   let savedConnections = [];
+  let savedClusters = [];
   let activeSessionId = null;
   let sending = false;
 
@@ -392,6 +396,47 @@ function createAgentModule(deps) {
     } catch (_) {
       savedConnections = [];
     }
+  }
+
+  async function loadClusters() {
+    try {
+      savedClusters = await api.k8sListClusters?.();
+      if (!Array.isArray(savedClusters)) savedClusters = [];
+    } catch (_) {
+      savedClusters = [];
+    }
+  }
+
+  function currentTargetType(session) {
+    const k8s = session?.targets?.find((t) => t.type === 'k8s' && t.clusterId);
+    if (k8s) return 'k8s';
+    return 'ssh';
+  }
+
+  function updateTargetControlsVisibility(type) {
+    const isK8s = type === 'k8s';
+    els.targetSelect?.classList.toggle('hidden', isK8s);
+    els.k8sClusterSelect?.classList.toggle('hidden', !isK8s);
+    els.k8sNamespace?.classList.toggle('hidden', !isK8s);
+  }
+
+  function buildTargetsFromUi() {
+    const type = els.targetType?.value || 'ssh';
+    if (type === 'k8s') {
+      const clusterId = els.k8sClusterSelect?.value || '';
+      if (!clusterId) return [];
+      const cluster = savedClusters.find((c) => c.id === clusterId);
+      const namespace = (els.k8sNamespace?.value || '').trim();
+      const target = {
+        type: 'k8s',
+        clusterId,
+        context: cluster?.defaultContext || undefined,
+      };
+      if (namespace) target.namespace = namespace;
+      return [target];
+    }
+    const serverId = els.targetSelect?.value || '';
+    return serverId ? [{ type: 'ssh', serverId }] : [];
   }
 
   async function loadSessions() {
@@ -472,6 +517,7 @@ function createAgentModule(deps) {
     activeSessionId = id;
     showWorkbench(true);
     await loadConnections();
+    await loadClusters();
     await renderMessages();
     confirm.showConfirmForActiveSession();
   }
@@ -481,27 +527,51 @@ function createAgentModule(deps) {
   }
 
   function renderTargetSelect(session) {
-    if (!els.targetSelect) return;
-    const current = session?.targets?.find((t) => t.type === 'ssh')?.serverId || '';
-    els.targetSelect.innerHTML = '<option value="">未绑定</option>';
-    for (const c of savedConnections) {
-      const opt = document.createElement('option');
-      opt.value = c.id;
-      opt.textContent = c.label || c.host || c.id;
-      if (c.id === current) opt.selected = true;
-      els.targetSelect.appendChild(opt);
+    const type = currentTargetType(session);
+    if (els.targetType) els.targetType.value = type;
+    updateTargetControlsVisibility(type);
+
+    const sshTarget = session?.targets?.find((t) => t.type === 'ssh' && t.serverId);
+    if (els.targetSelect) {
+      els.targetSelect.innerHTML = '<option value="">未绑定</option>';
+      for (const c of savedConnections) {
+        const opt = document.createElement('option');
+        opt.value = c.id;
+        opt.textContent = c.label || c.host || c.id;
+        if (c.id === sshTarget?.serverId) opt.selected = true;
+        els.targetSelect.appendChild(opt);
+      }
+    }
+
+    const k8sTarget = session?.targets?.find((t) => t.type === 'k8s' && t.clusterId);
+    if (els.k8sClusterSelect) {
+      els.k8sClusterSelect.innerHTML = '<option value="">未绑定</option>';
+      for (const c of savedClusters) {
+        const opt = document.createElement('option');
+        opt.value = c.id;
+        opt.textContent = c.name || c.id;
+        if (c.id === k8sTarget?.clusterId) opt.selected = true;
+        els.k8sClusterSelect.appendChild(opt);
+      }
+    }
+    if (els.k8sNamespace) {
+      els.k8sNamespace.value = k8sTarget?.namespace || '';
     }
   }
 
   async function onTargetChange() {
-    if (!activeSessionId || !els.targetSelect) return;
-    const serverId = els.targetSelect.value;
-    const targets = serverId ? [{ type: 'ssh', serverId }] : [];
+    if (!activeSessionId) return;
+    const targets = buildTargetsFromUi();
     try {
       await api.agentSetTargets(activeSessionId, targets);
     } catch (err) {
       showToast(`绑定目标失败: ${err.message}`, 'error');
     }
+  }
+
+  async function onTargetTypeChange() {
+    updateTargetControlsVisibility(els.targetType?.value || 'ssh');
+    await onTargetChange();
   }
 
   async function renderMessages() {
@@ -568,7 +638,11 @@ function createAgentModule(deps) {
     els.deleteBtn?.addEventListener('click', () => {
       if (activeSessionId) deleteSession(activeSessionId);
     });
+    els.targetType?.addEventListener('change', onTargetTypeChange);
     els.targetSelect?.addEventListener('change', onTargetChange);
+    els.k8sClusterSelect?.addEventListener('change', onTargetChange);
+    els.k8sNamespace?.addEventListener('change', onTargetChange);
+    els.k8sNamespace?.addEventListener('blur', onTargetChange);
     els.sendBtn?.addEventListener('click', sendMessage);
     els.input?.addEventListener('keydown', (e) => {
       if (e.key === 'Enter' && !e.shiftKey) {

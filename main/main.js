@@ -13,6 +13,7 @@ const Store = require('electron-store');
 const { registerSftpIpc } = require('./sftp');
 const { registerMetricsIpc } = require('./metrics');
 const { registerAgentIpc } = require('./agent/ipc');
+const { registerK8sIpc } = require('./k8s');
 
 const store = new Store({ name: 'connections' });
 const snippetStore = new Store({ name: 'snippets' });
@@ -316,6 +317,7 @@ function getConnectionCredential(connectionId) {
 
 registerSftpIpc(ipcMain, sessions, () => mainWindow);
 registerMetricsIpc(ipcMain, sessions);
+registerK8sIpc(ipcMain, () => mainWindow);
 registerAgentIpc(ipcMain, {
   encryptSecret,
   decryptSecret,

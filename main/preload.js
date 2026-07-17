@@ -36,6 +36,47 @@ contextBridge.exposeInMainWorld('localWebSSH', {
   sftpUpload: (sessionId, remoteDir) => ipcRenderer.invoke('sftp-upload', { sessionId, remoteDir }),
   fetchMetrics: (sessionId) => ipcRenderer.invoke('metrics-fetch', { sessionId }),
 
+  k8sListClusters: () => ipcRenderer.invoke('k8s-clusters-list'),
+  k8sSaveClusters: (items) => ipcRenderer.invoke('k8s-clusters-save', items),
+  k8sParseContexts: (kubeconfigYaml) => ipcRenderer.invoke('k8s-parse-contexts', kubeconfigYaml),
+  k8sPickKubeconfig: () => ipcRenderer.invoke('k8s-pick-kubeconfig'),
+  k8sTestConnection: (payload) => ipcRenderer.invoke('k8s-test-connection', payload),
+  k8sListNamespaces: (payload) => ipcRenderer.invoke('k8s-list-namespaces', payload),
+  k8sListPods: (payload) => ipcRenderer.invoke('k8s-list-pods', payload),
+  k8sFetchLogs: (payload) => ipcRenderer.invoke('k8s-fetch-logs', payload),
+  k8sLogsStreamStart: (payload) => ipcRenderer.invoke('k8s-logs-stream-start', payload),
+  k8sLogsStreamStop: (streamId) => ipcRenderer.invoke('k8s-logs-stream-stop', { streamId }),
+  k8sExecStart: (payload) => ipcRenderer.invoke('k8s-exec-start', payload),
+  k8sExecWrite: (execId, data) => ipcRenderer.send('k8s-exec-write', { execId, data }),
+  k8sExecResize: (execId, cols, rows) => ipcRenderer.send('k8s-exec-resize', { execId, cols, rows }),
+  k8sExecStop: (execId) => ipcRenderer.invoke('k8s-exec-stop', { execId }),
+  k8sFetchMetrics: (payload) => ipcRenderer.invoke('k8s-fetch-metrics', payload),
+  onK8sLogChunk: (handler) => {
+    const listener = (_event, payload) => handler(payload);
+    ipcRenderer.on('k8s-log-chunk', listener);
+    return () => ipcRenderer.removeListener('k8s-log-chunk', listener);
+  },
+  onK8sLogEnd: (handler) => {
+    const listener = (_event, payload) => handler(payload);
+    ipcRenderer.on('k8s-log-end', listener);
+    return () => ipcRenderer.removeListener('k8s-log-end', listener);
+  },
+  onK8sLogError: (handler) => {
+    const listener = (_event, payload) => handler(payload);
+    ipcRenderer.on('k8s-log-error', listener);
+    return () => ipcRenderer.removeListener('k8s-log-error', listener);
+  },
+  onK8sExecOutput: (handler) => {
+    const listener = (_event, payload) => handler(payload);
+    ipcRenderer.on('k8s-exec-output', listener);
+    return () => ipcRenderer.removeListener('k8s-exec-output', listener);
+  },
+  onK8sExecClosed: (handler) => {
+    const listener = (_event, payload) => handler(payload);
+    ipcRenderer.on('k8s-exec-closed', listener);
+    return () => ipcRenderer.removeListener('k8s-exec-closed', listener);
+  },
+
   agentGetSettings: () => ipcRenderer.invoke('agent-settings-get'),
   agentSaveSettings: (s) => ipcRenderer.invoke('agent-settings-save', s),
   agentChat: (payload) => ipcRenderer.invoke('agent-chat', payload),

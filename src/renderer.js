@@ -26,6 +26,9 @@ function bootCheck() {
   if (!window.LocalWebSSHAgent) {
     errors.push('agent-ui.js 未加载。');
   }
+  if (!window.LocalWebSSHK8s) {
+    errors.push('k8s-ui.js 未加载。');
+  }
   try {
     createFitAddon();
   } catch (e) {
@@ -74,6 +77,8 @@ const els = {
   snippetsBrowser: document.getElementById('snippets-browser'),
   agentBrowser: document.getElementById('agent-browser'),
   agentWorkbench: document.getElementById('agent-workbench'),
+  k8sBrowser: document.getElementById('k8s-browser'),
+  k8sWorkbench: document.getElementById('k8s-workbench'),
   serverSearch: document.getElementById('server-search'),
 };
 
@@ -95,7 +100,9 @@ let toastTimer = null;
 const sftpUi = window.LocalWebSSHSftp;
 const monitorUi = window.LocalWebSSHMonitor;
 const agentUiFactory = window.LocalWebSSHAgent;
+const k8sUiFactory = window.LocalWebSSHK8s;
 let agentUi = null;
+let k8sUi = null;
 
 const readonlyConnectFields = ['host', 'port', 'username', 'label'];
 
@@ -262,9 +269,19 @@ function focusInventoryView(view) {
       workspaceMode = 'agent';
       agentUi?.leaveWorkbench?.();
     }
+    k8sUi?.leaveWorkbench?.();
+  } else if (view === 'k8s') {
+    if (k8sUi?.isInWorkbench?.()) {
+      workspaceMode = 'k8s-workbench';
+    } else {
+      workspaceMode = 'k8s';
+      k8sUi?.leaveWorkbench?.();
+    }
+    agentUi?.leaveWorkbench?.();
   } else {
     workspaceMode = view === 'snippets' ? 'snippets' : 'servers';
     agentUi?.leaveWorkbench?.();
+    k8sUi?.leaveWorkbench?.();
   }
   document.querySelectorAll('.nav-item[data-view]').forEach((btn) => {
     btn.classList.toggle('active', btn.dataset.view === view);
@@ -481,6 +498,8 @@ function updateWorkspaceVisibility() {
   const isSnippets = workspaceMode === 'snippets';
   const isAgent = workspaceMode === 'agent';
   const isAgentWb = workspaceMode === 'agent-workbench';
+  const isK8s = workspaceMode === 'k8s';
+  const isK8sWb = workspaceMode === 'k8s-workbench';
   const noServers = savedConnections.length === 0;
 
   els.welcome.classList.toggle('hidden', !isServers || !noServers);
@@ -488,6 +507,8 @@ function updateWorkspaceVisibility() {
   els.snippetsBrowser.classList.toggle('hidden', !isSnippets);
   els.agentBrowser?.classList.toggle('hidden', !isAgent);
   els.agentWorkbench?.classList.toggle('hidden', !isAgentWb);
+  els.k8sBrowser?.classList.toggle('hidden', !isK8s);
+  els.k8sWorkbench?.classList.toggle('hidden', !isK8sWb);
   els.tabBar.classList.toggle('hidden', !isTerminal);
   els.sessionPanels.classList.toggle('hidden', !isTerminal);
   els.sessionToolbar.classList.toggle('hidden', !isTerminal);
@@ -812,6 +833,7 @@ function setSidebarView(view) {
   if (view === 'servers') renderServersBrowser();
   if (view === 'snippets') renderSnippets();
   if (view === 'agent') agentUi?.loadSessions?.();
+  if (view === 'k8s') k8sUi?.loadClusters?.();
 }
 
 
@@ -1025,6 +1047,25 @@ async function init() {
     },
     onLeaveWorkbench: () => {
       if (workspaceMode === 'agent-workbench') workspaceMode = 'agent';
+      updateWorkspaceVisibility();
+    },
+  });
+  k8sUi = k8sUiFactory.createK8sModule({
+    api,
+    showToast,
+    uid,
+    appSettings,
+    themesApi,
+    createFitAddon,
+    onEnterWorkbench: () => {
+      workspaceMode = 'k8s-workbench';
+      document.querySelectorAll('.nav-item[data-view]').forEach((btn) => {
+        btn.classList.toggle('active', btn.dataset.view === 'k8s');
+      });
+      updateWorkspaceVisibility();
+    },
+    onLeaveWorkbench: () => {
+      if (workspaceMode === 'k8s-workbench') workspaceMode = 'k8s';
       updateWorkspaceVisibility();
     },
   });

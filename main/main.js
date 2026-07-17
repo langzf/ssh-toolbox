@@ -12,6 +12,7 @@ const { Client } = require('ssh2');
 const Store = require('electron-store');
 const { registerSftpIpc } = require('./sftp');
 const { registerMetricsIpc } = require('./metrics');
+const { registerAgentIpc } = require('./agent/ipc');
 
 const store = new Store({ name: 'connections' });
 const snippetStore = new Store({ name: 'snippets' });
@@ -298,6 +299,7 @@ function cleanupSession(sessionId) {
 
 registerSftpIpc(ipcMain, sessions, () => mainWindow);
 registerMetricsIpc(ipcMain, sessions);
+registerAgentIpc(ipcMain, { encryptSecret, decryptSecret });
 
 ipcMain.handle('ssh-disconnect', (_event, sessionId) => {
   cleanupSession(sessionId);

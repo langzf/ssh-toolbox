@@ -35,4 +35,8 @@ contextBridge.exposeInMainWorld('localWebSSH', {
     ipcRenderer.invoke('sftp-download', { sessionId, remotePath, fileName }),
   sftpUpload: (sessionId, remoteDir) => ipcRenderer.invoke('sftp-upload', { sessionId, remoteDir }),
   fetchMetrics: (sessionId) => ipcRenderer.invoke('metrics-fetch', { sessionId }),
+
+  agentGetSettings: () => ipcRenderer.invoke('agent-settings-get'),
+  agentSaveSettings: (s) => ipcRenderer.invoke('agent-settings-save', s),
+  agentChat: (payload) => ipcRenderer.invoke('agent-chat', payload),
 });

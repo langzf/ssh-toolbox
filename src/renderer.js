@@ -831,12 +831,24 @@ els.btnPaneMonitor?.addEventListener('click', () => {
   if (activeSessionId) setSessionPane(activeSessionId, 'monitor');
 });
 
-document.getElementById('btn-settings').addEventListener('click', () => {
+document.getElementById('btn-settings').addEventListener('click', async () => {
   const dlg = document.getElementById('settings-dialog');
   const form = document.getElementById('settings-form');
   form.defaultPort.value = appSettings.defaultPort;
   form.fontSize.value = appSettings.fontSize;
   themesApi.populateThemeSelect(document.getElementById('settings-theme'), appSettings.themeId);
+  try {
+    const agent = await api.agentGetSettings();
+    form.agentBaseUrl.value = agent.baseUrl || '';
+    form.agentModel.value = agent.model || '';
+    form.agentPolicyMode.value = agent.policyMode || 'standard';
+    form.agentMaxSteps.value = agent.maxSteps ?? 12;
+    form.agentTimeoutMs.value = agent.timeoutMs ?? 60000;
+    form.agentApiKey.value = '';
+    form.agentApiKey.placeholder = agent.hasApiKey ? '已保存 Key（留空则不修改）' : '请输入 API Key';
+  } catch (err) {
+    showToast(`读取 Agent 设置失败: ${err.message}`, 'error');
+  }
   dlg.showModal();
 });
 
@@ -850,8 +862,37 @@ document.getElementById('settings-form').addEventListener('submit', async (e) =>
   };
   applyThemeToAllSessions();
   await api.saveSettings(appSettings);
+  const agentPayload = {
+    baseUrl: String(fd.get('agentBaseUrl') || '').trim(),
+    model: String(fd.get('agentModel') || '').trim(),
+    policyMode: fd.get('agentPolicyMode') || 'standard',
+    maxSteps: Number(fd.get('agentMaxSteps')) || 12,
+    timeoutMs: Number(fd.get('agentTimeoutMs')) || 60000,
+  };
+  const apiKey = String(fd.get('agentApiKey') || '').trim();
+  if (apiKey) agentPayload.apiKey = apiKey;
+  try {
+    await api.agentSaveSettings(agentPayload);
+  } catch (err) {
+    showToast(`Agent 设置保存失败: ${err.message}`, 'error');
+    return;
+  }
   document.getElementById('settings-dialog').close();
   showToast('设置已保存', 'success');
+});
+
+document.getElementById('btn-agent-test').addEventListener('click', async () => {
+  const btn = document.getElementById('btn-agent-test');
+  btn.disabled = true;
+  try {
+    const reply = await api.agentChat({ messages: [{ role: 'user', content: '回复：pong' }] });
+    const text = reply?.content || JSON.stringify(reply);
+    showToast(`Agent 回复: ${text.slice(0, 120)}`, 'success', 6000);
+  } catch (err) {
+    showToast(err.message || String(err), 'error', 6000);
+  } finally {
+    btn.disabled = false;
+  }
 });
 
 document.getElementById('settings-close').addEventListener('click', () => {

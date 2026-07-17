@@ -200,6 +200,38 @@
             外观主题
             <select name="themeId" id="settings-theme"></select>
           </label>
+          <h3 class="form-section-title span-2">Agent</h3>
+          <label class="span-2">
+            Base URL
+            <input name="agentBaseUrl" id="agentBaseUrl" type="url" placeholder="https://api.openai.com" />
+          </label>
+          <label class="span-2">
+            API Key
+            <input name="agentApiKey" id="agentApiKey" type="password" autocomplete="off" placeholder="留空则不修改已保存的 Key" />
+          </label>
+          <label>
+            Model
+            <input name="agentModel" id="agentModel" type="text" placeholder="gpt-4o-mini" />
+          </label>
+          <label>
+            策略模式
+            <select name="agentPolicyMode" id="agentPolicyMode">
+              <option value="strict">严格</option>
+              <option value="standard">标准</option>
+              <option value="relaxed">宽松</option>
+            </select>
+          </label>
+          <label>
+            最大步数
+            <input name="agentMaxSteps" id="agentMaxSteps" type="number" min="1" max="50" />
+          </label>
+          <label>
+            超时 (ms)
+            <input name="agentTimeoutMs" id="agentTimeoutMs" type="number" min="5000" max="300000" step="1000" />
+          </label>
+          <div class="span-2 agent-test-row">
+            <button type="button" id="btn-agent-test" class="btn-secondary">测试 Agent 连接</button>
+          </div>
         </div>
         <footer class="dialog-footer">
           <button type="button" id="settings-cancel" class="btn-secondary">取消</button>

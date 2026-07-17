@@ -1362,6 +1362,20 @@ body {
   grid-column: span 2;
 }
 
+.form-section-title {
+  grid-column: span 2;
+  margin: 4px 0 0;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--dialog-text);
+}
+
+.agent-test-row {
+  display: flex;
+  justify-content: flex-start;
+  padding-top: 4px;
+}
+
 .form-grid input,
 .form-grid select {
   border: 1px solid var(--btn-secondary-border);

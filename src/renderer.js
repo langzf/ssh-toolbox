@@ -57,6 +57,7 @@ const els = {
   btnPaneTerminal: document.getElementById('btn-pane-terminal'),
   btnPaneSftp: document.getElementById('btn-pane-sftp'),
   btnPaneMonitor: document.getElementById('btn-pane-monitor'),
+  btnPaneAgent: document.getElementById('btn-pane-agent'),
   welcome: document.getElementById('welcome'),
   sessionToolbar: document.getElementById('session-toolbar'),
   toolbarTitle: document.getElementById('toolbar-title'),
@@ -93,6 +94,7 @@ let serverSearchQuery = '';
 let toastTimer = null;
 const sftpUi = window.LocalWebSSHSftp;
 const monitorUi = window.LocalWebSSHMonitor;
+const agentUiFactory = window.LocalWebSSHAgent;
 let agentUi = null;
 
 const readonlyConnectFields = ['host', 'port', 'username', 'label'];
@@ -497,21 +499,26 @@ function setSessionPane(sessionId, pane) {
   const session = sessions.get(sessionId);
   if (!session) return;
 
-  const valid = ['terminal', 'sftp', 'monitor'];
+  const valid = ['terminal', 'sftp', 'monitor', 'agent'];
   session.viewPane = valid.includes(pane) ? pane : 'terminal';
 
   if (session.viewPane !== 'monitor' && session.monitorStop) {
     session.monitorStop();
+  }
+  if (session.viewPane !== 'agent' && session.agentDeactivate) {
+    session.agentDeactivate();
   }
 
   const p = session.viewPane;
   session.panel.classList.toggle('active', p === 'terminal');
   session.sftpPanel.classList.toggle('active', p === 'sftp');
   session.monitorPanel.classList.toggle('active', p === 'monitor');
+  session.agentPanel.classList.toggle('active', p === 'agent');
 
   els.btnPaneTerminal?.classList.toggle('active', p === 'terminal');
   els.btnPaneSftp?.classList.toggle('active', p === 'sftp');
   els.btnPaneMonitor?.classList.toggle('active', p === 'monitor');
+  els.btnPaneAgent?.classList.toggle('active', p === 'agent');
 
   if (p === 'sftp') {
     if (!session.sftpReady) {
@@ -522,6 +529,13 @@ function setSessionPane(sessionId, pane) {
     }
   } else if (p === 'monitor') {
     session.monitorStart();
+  } else if (p === 'agent') {
+    if (!session.agentReady) {
+      session.agentReady = true;
+      session.agentInit();
+    } else {
+      session.agentRefresh?.();
+    }
   } else {
     requestAnimationFrame(() => {
       session.resize();
@@ -613,7 +627,9 @@ function setActiveSession(sessionId) {
       s.panel.classList.remove('active');
       s.sftpPanel.classList.remove('active');
       s.monitorPanel.classList.remove('active');
+      s.agentPanel.classList.remove('active');
       s.monitorStop?.();
+      s.agentDeactivate?.();
     }
   }
   renderServersBrowser();
@@ -631,6 +647,8 @@ async function teardownSession(sessionId) {
   session.sftpPanel.remove();
   session.monitorStop?.();
   session.monitorPanel.remove();
+  session.agentDestroy?.();
+  session.agentPanel.remove();
   session.tab.remove();
   sessions.delete(sessionId);
   if (activeSessionId === sessionId) activeSessionId = null;
@@ -675,8 +693,20 @@ async function startConnection(formData, options = {}) {
   const tab = createTab(sessionId, displayName);
   const sftp = sftpUi.createSftpPanel(sessionId, api, showToast);
   const monitor = monitorUi.createMonitorPanel(sessionId, api, showToast);
+  const agent = agentUiFactory.createSessionAgentPanel(
+    sessionId,
+    () => sessions.get(sessionId)?.savedId,
+    {
+      api,
+      showToast,
+      onOpenInSidebar: (agentSessionId) => {
+        agentUi?.openSessionInWorkbench?.(agentSessionId);
+      },
+    }
+  );
   els.sessionPanels.appendChild(sftp.panel);
   els.sessionPanels.appendChild(monitor.panel);
+  els.sessionPanels.appendChild(agent.panel);
 
   sessions.set(sessionId, {
     ...terminal,
@@ -694,6 +724,12 @@ async function startConnection(formData, options = {}) {
     monitorStart: monitor.start,
     monitorStop: monitor.stop,
     monitorRefresh: monitor.refresh,
+    agentPanel: agent.panel,
+    agentInit: agent.init,
+    agentDeactivate: agent.deactivate,
+    agentDestroy: agent.destroy,
+    agentRefresh: agent.refresh,
+    agentReady: false,
   });
 
   updateWorkspaceVisibility();
@@ -852,6 +888,10 @@ els.btnPaneMonitor?.addEventListener('click', () => {
   if (activeSessionId) setSessionPane(activeSessionId, 'monitor');
 });
 
+els.btnPaneAgent?.addEventListener('click', () => {
+  if (activeSessionId) setSessionPane(activeSessionId, 'agent');
+});
+
 document.getElementById('btn-settings').addEventListener('click', async () => {
   const dlg = document.getElementById('settings-dialog');
   const form = document.getElementById('settings-form');
@@ -972,7 +1012,7 @@ async function init() {
   } catch (err) {
     showToast(`初始化失败: ${err.message}`, 'error', 5000);
   }
-  agentUi = window.LocalWebSSHAgent.createAgentModule({
+  agentUi = agentUiFactory.createAgentModule({
     api,
     showToast,
     uid,

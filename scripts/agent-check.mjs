@@ -47,6 +47,46 @@ const L5_FILES = [
   'main/agent/tools/sftp-write.js',
 ];
 
+const L6_FILES = [
+  ...L5_FILES,
+  'src/index.html',
+  'src/renderer.js',
+  'src/styles.css',
+];
+
+function checkL6HtmlIds() {
+  const htmlPath = path.join(root, 'src/index.html');
+  const html = existsSync(htmlPath) ? readFileSync(htmlPath, 'utf8') : '';
+  const required = ['btn-pane-agent', 'data-pane="agent"'];
+  const missing = required.filter((id) => !html.includes(id));
+  if (missing.length) {
+    console.error('Missing L6 HTML markers:', missing.join(', '));
+    process.exit(1);
+  }
+}
+
+function checkL6AgentUi() {
+  const uiPath = path.join(root, 'src/agent-ui.js');
+  const src = existsSync(uiPath) ? readFileSync(uiPath, 'utf8') : '';
+  const required = ['createSessionAgentPanel', 'onOpenInSidebar', 'sshSessionId'];
+  const missing = required.filter((name) => !src.includes(name));
+  if (missing.length) {
+    console.error('Missing L6 agent-ui exports:', missing.join(', '));
+    process.exit(1);
+  }
+}
+
+function checkL6Renderer() {
+  const rendererPath = path.join(root, 'src/renderer.js');
+  const src = existsSync(rendererPath) ? readFileSync(rendererPath, 'utf8') : '';
+  const required = ["setSessionPane(activeSessionId, 'agent')", 'createSessionAgentPanel', 'agentPanel'];
+  const missing = required.filter((name) => !src.includes(name));
+  if (missing.length) {
+    console.error('Missing L6 renderer wiring:', missing.join(', '));
+    process.exit(1);
+  }
+}
+
 function parseLayer(argv) {
   const arg = argv.find((a) => a.startsWith('--layer='));
   return arg ? Number(arg.split('=')[1]) : 1;
@@ -211,6 +251,26 @@ if (layer === 1) {
     'main/agent/confirm.test.js'
   );
   console.log('L5 OK');
+} else if (layer === 6) {
+  checkFiles(L6_FILES);
+  checkPreloadExports();
+  checkL3PreloadExports();
+  checkL4PreloadExports();
+  checkHtmlIds();
+  checkL3HtmlIds();
+  checkL4HtmlIds();
+  checkL6HtmlIds();
+  checkL6AgentUi();
+  checkL6Renderer();
+  checkL4Ipc();
+  runTests(
+    'main/agent/llm-client.test.js',
+    'main/agent/sessions.test.js',
+    'main/agent/policy.test.js',
+    'main/agent/runtime.test.js',
+    'main/agent/confirm.test.js'
+  );
+  console.log('L6 OK');
 } else {
   console.error(`Unknown or unsupported layer: ${layer}`);
   process.exit(1);

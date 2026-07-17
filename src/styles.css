@@ -827,7 +827,8 @@ body {
 
 .terminal-panel,
 .sftp-panel,
-.monitor-panel {
+.monitor-panel,
+.agent-panel {
   position: absolute;
   inset: 0;
   display: none;
@@ -859,6 +860,50 @@ body {
 
 .monitor-panel.active {
   display: flex;
+}
+
+.agent-panel {
+  flex-direction: column;
+  padding: 0;
+  color: var(--toolbar-fg);
+  background: var(--panel-bg);
+  overflow: hidden;
+}
+
+.agent-panel.active {
+  display: flex;
+}
+
+.agent-pane-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--border-subtle);
+  flex-shrink: 0;
+  font-size: 13px;
+}
+
+.agent-pane-bound {
+  color: var(--muted-text);
+}
+
+.agent-pane-sidebar-btn {
+  flex-shrink: 0;
+}
+
+.agent-pane-messages {
+  flex: 1;
+  min-height: 0;
+}
+
+.agent-panel .agent-compose {
+  background: var(--panel-bg);
+}
+
+.agent-panel .agent-confirm-bar {
+  flex-shrink: 0;
 }
 
 .monitor-toolbar {

@@ -1,29 +1,73 @@
 /* global escapeHtml */
 
-function createAgentModule(deps) {
-  const { api, showToast, uid, onEnterWorkbench, onLeaveWorkbench } = deps;
+const confirmBus = {
+  subs: new Set(),
+  inited: false,
+  init(api) {
+    if (this.inited) return;
+    this.inited = true;
+    api.onAgentConfirmRequest?.((req) => {
+      for (const fn of this.subs) fn(req);
+    });
+  },
+  subscribe(fn) {
+    this.subs.add(fn);
+    return () => this.subs.delete(fn);
+  },
+};
 
-  const els = {
-    browser: document.getElementById('agent-browser'),
-    browserList: document.getElementById('agent-session-list'),
-    sessionCount: document.getElementById('agent-count'),
-    workbench: document.getElementById('agent-workbench'),
-    wbTitle: document.getElementById('agent-wb-title'),
-    targetSelect: document.getElementById('agent-target-select'),
-    messages: document.getElementById('agent-messages'),
-    input: document.getElementById('agent-input'),
-    sendBtn: document.getElementById('agent-send'),
-    deleteBtn: document.getElementById('agent-delete-session'),
-    confirmBar: document.getElementById('agent-confirm-bar'),
-  };
+function riskLabel(level) {
+  if (level === 'danger') return '高危';
+  if (level === 'write') return '写操作';
+  return '只读';
+}
 
-  let sessions = [];
-  let savedConnections = [];
-  let activeSessionId = null;
-  let sending = false;
-  /** @type {Map<string, object>} */
+function renderToolCards(toolCalls) {
+  if (!toolCalls?.length) return '';
+  const cards = toolCalls
+    .map((tc) => {
+      const name = tc.function?.name || 'unknown';
+      const args = tc.function?.arguments || '{}';
+      return `<details class="agent-tool-card"><summary>🔧 ${escapeHtml(name)}</summary><pre>${escapeHtml(args)}</pre></details>`;
+    })
+    .join('');
+  return `<div class="agent-tool-cards">${cards}</div>`;
+}
+
+function renderMessageBubble(msg) {
+  const div = document.createElement('div');
+  div.className = `agent-msg agent-msg-${msg.role}`;
+  const roleLabel =
+    msg.role === 'user'
+      ? '你'
+      : msg.role === 'assistant'
+        ? '助手'
+        : msg.role === 'system'
+          ? '系统'
+          : msg.role === 'tool'
+            ? `工具 · ${msg.name || ''}`
+            : '工具';
+  const truncatedNote = msg.truncated ? ' <span class="agent-truncated">(已截断)</span>' : '';
+  const toolCards = msg.role === 'assistant' ? renderToolCards(msg.toolCalls) : '';
+  let body = escapeHtml(msg.content || '');
+  if (msg.role === 'tool' && msg.content) {
+    try {
+      const parsed = JSON.parse(msg.content);
+      body = escapeHtml(JSON.stringify(parsed, null, 2));
+    } catch (_) {
+      /* keep raw */
+    }
+  }
+  div.innerHTML = `
+    <div class="agent-msg-role">${escapeHtml(roleLabel)}${truncatedNote}</div>
+    <div class="agent-msg-body">${body}</div>
+    ${toolCards}
+  `;
+  return div;
+}
+
+function createConfirmController({ confirmEl, api, showToast, getActiveSessionId }) {
   const pendingConfirms = new Map();
-  /** @type {Map<string, string[]>} FIFO confirmId queue per agent session */
   const confirmQueues = new Map();
 
   function sessionKey(agentSessionId) {
@@ -56,15 +100,283 @@ function createAgentModule(deps) {
     return pendingConfirms.get(queue[0]) ?? null;
   }
 
+  function hideConfirmBar() {
+    if (!confirmEl) return;
+    confirmEl.classList.add('hidden');
+    confirmEl.innerHTML = '';
+  }
+
+  function renderConfirmBar(req) {
+    if (!confirmEl) return;
+    const argsText = JSON.stringify(req.args ?? {}, null, 2);
+    confirmEl.classList.remove('hidden');
+    confirmEl.innerHTML = `
+      <h3 class="agent-confirm-title">需要确认：${escapeHtml(req.toolName || '')}</h3>
+      <p class="agent-confirm-meta">${escapeHtml(req.reason || '')} · 风险：${escapeHtml(riskLabel(req.riskLevel))}</p>
+      <pre class="agent-confirm-args">${escapeHtml(argsText)}</pre>
+      <div class="agent-confirm-actions">
+        <button type="button" class="btn-primary" data-decision="allow-once">允许一次</button>
+        <button type="button" class="btn-secondary" data-decision="allow-session">允许本会话同类</button>
+        <button type="button" class="btn-text" data-decision="deny">拒绝</button>
+      </div>
+    `;
+    confirmEl.querySelectorAll('[data-decision]').forEach((btn) => {
+      btn.addEventListener('click', async () => {
+        const decision = btn.getAttribute('data-decision');
+        await respondConfirm(req.confirmId, decision);
+      });
+    });
+    confirmEl.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+  }
+
+  async function respondConfirm(confirmId, decision) {
+    try {
+      await api.agentConfirmResponse({ confirmId, decision });
+    } catch (err) {
+      showToast(`确认响应失败: ${err.message}`, 'error');
+      return;
+    }
+    const sessionId = dequeueConfirm(confirmId);
+    if (sessionId === sessionKey(getActiveSessionId())) {
+      showConfirmForActiveSession();
+    }
+  }
+
   function showConfirmForActiveSession() {
-    if (!activeSessionId) {
+    const activeId = getActiveSessionId();
+    if (!activeId) {
       hideConfirmBar();
       return;
     }
-    const front = frontConfirmForSession(activeSessionId);
+    const front = frontConfirmForSession(activeId);
     if (front) renderConfirmBar(front);
     else hideConfirmBar();
   }
+
+  function onConfirmRequest(req) {
+    if (!req?.confirmId) return;
+    enqueueConfirm(req);
+    if (req.agentSessionId && req.agentSessionId !== getActiveSessionId()) {
+      showToast(`会话 ${req.toolName || '工具'} 等待确认`, 'info', 4000);
+      return;
+    }
+    const front = frontConfirmForSession(getActiveSessionId());
+    if (front?.confirmId === req.confirmId) renderConfirmBar(req);
+  }
+
+  return {
+    hideConfirmBar,
+    showConfirmForActiveSession,
+    onConfirmRequest,
+  };
+}
+
+function createSessionAgentPanel(sshSessionId, getServerId, deps) {
+  const { api, showToast, onOpenInSidebar } = deps;
+  confirmBus.init(api);
+
+  const panel = document.createElement('div');
+  panel.className = 'agent-panel';
+  panel.dataset.sessionId = sshSessionId;
+
+  panel.innerHTML = `
+    <header class="agent-pane-header">
+      <span class="agent-pane-bound">已绑定当前 SSH 会话</span>
+      <button type="button" class="btn-text agent-pane-sidebar-btn" data-action="open-sidebar">在侧栏打开</button>
+    </header>
+    <div class="agent-pane-messages agent-messages" role="log" aria-live="polite"></div>
+    <div class="agent-confirm-bar hidden" role="alertdialog"></div>
+    <footer class="agent-compose">
+      <textarea class="agent-pane-input" rows="3" placeholder="输入消息，Enter 发送，Shift+Enter 换行…"></textarea>
+      <button type="button" class="btn-primary agent-pane-send">发送</button>
+    </footer>
+  `;
+
+  const messagesEl = panel.querySelector('.agent-pane-messages');
+  const confirmEl = panel.querySelector('.agent-confirm-bar');
+  const inputEl = panel.querySelector('.agent-pane-input');
+  const sendBtn = panel.querySelector('.agent-pane-send');
+  let agentSessionId = null;
+  let sending = false;
+  let paneActive = false;
+
+  const confirm = createConfirmController({
+    confirmEl,
+    api,
+    showToast,
+    getActiveSessionId: () => (paneActive ? agentSessionId : null),
+  });
+
+  const unsubConfirm = confirmBus.subscribe((req) => {
+    if (paneActive) confirm.onConfirmRequest(req);
+  });
+
+  async function findBoundAgentSession() {
+    const list = await api.agentListSessions();
+    if (!Array.isArray(list)) return null;
+    for (const entry of list) {
+      const session = await api.agentGetSession(entry.id);
+      const match = session?.targets?.find(
+        (t) => t.type === 'ssh' && t.sshSessionId === sshSessionId
+      );
+      if (match) return session;
+    }
+    return null;
+  }
+
+  async function ensureAgentSession() {
+    const serverId = getServerId();
+    if (!serverId) throw new Error('未绑定服务器');
+
+    const targets = [{ type: 'ssh', serverId, sshSessionId }];
+    if (agentSessionId) {
+      await api.agentSetTargets(agentSessionId, targets);
+      return agentSessionId;
+    }
+
+    const existing = await findBoundAgentSession();
+    if (existing) {
+      agentSessionId = existing.id;
+      await api.agentSetTargets(agentSessionId, targets);
+      return agentSessionId;
+    }
+
+    const created = await api.agentCreateSession({});
+    agentSessionId = created.id;
+    await api.agentSetTargets(agentSessionId, targets);
+    return agentSessionId;
+  }
+
+  async function renderMessages() {
+    if (!messagesEl || !agentSessionId) return;
+    messagesEl.innerHTML = '';
+    try {
+      const session = await api.agentGetSession(agentSessionId);
+      if (!session) {
+        showToast('Agent 会话不存在', 'error');
+        agentSessionId = null;
+        return;
+      }
+      for (const msg of session.messages || []) {
+        messagesEl.appendChild(renderMessageBubble(msg));
+      }
+      messagesEl.scrollTop = messagesEl.scrollHeight;
+    } catch (err) {
+      showToast(`加载消息失败: ${err.message}`, 'error');
+    }
+  }
+
+  async function sendMessage() {
+    if (sending || !agentSessionId || !inputEl) return;
+    const text = inputEl.value.trim();
+    if (!text) return;
+
+    sending = true;
+    sendBtn.disabled = true;
+    inputEl.value = '';
+
+    try {
+      await api.agentSend({ agentSessionId, userText: text });
+      await renderMessages();
+    } catch (err) {
+      showToast(`发送失败: ${err.message}`, 'error');
+      try {
+        await api.agentAppendMessage(agentSessionId, {
+          role: 'assistant',
+          content: `错误: ${err.message}`,
+        });
+        await renderMessages();
+      } catch (_) {
+        /* ignore secondary failure */
+      }
+    } finally {
+      sending = false;
+      sendBtn.disabled = false;
+      if (paneActive) inputEl.focus();
+    }
+  }
+
+  async function init() {
+    paneActive = true;
+    try {
+      await ensureAgentSession();
+      await renderMessages();
+      confirm.showConfirmForActiveSession();
+      inputEl?.focus();
+    } catch (err) {
+      showToast(`Agent 初始化失败: ${err.message}`, 'error');
+    }
+  }
+
+  function deactivate() {
+    paneActive = false;
+    confirm.hideConfirmBar();
+  }
+
+  function destroy() {
+    deactivate();
+    unsubConfirm();
+  }
+
+  panel.querySelector('[data-action="open-sidebar"]')?.addEventListener('click', async () => {
+    try {
+      const id = await ensureAgentSession();
+      onOpenInSidebar?.(id);
+    } catch (err) {
+      showToast(`打开侧栏失败: ${err.message}`, 'error');
+    }
+  });
+
+  sendBtn?.addEventListener('click', sendMessage);
+  inputEl?.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault();
+      sendMessage();
+    }
+  });
+
+  return {
+    panel,
+    init,
+    deactivate,
+    destroy,
+    refresh: renderMessages,
+  };
+}
+
+function createAgentModule(deps) {
+  const { api, showToast, uid, onEnterWorkbench, onLeaveWorkbench } = deps;
+  confirmBus.init(api);
+
+  const els = {
+    browser: document.getElementById('agent-browser'),
+    browserList: document.getElementById('agent-session-list'),
+    sessionCount: document.getElementById('agent-count'),
+    workbench: document.getElementById('agent-workbench'),
+    wbTitle: document.getElementById('agent-wb-title'),
+    targetSelect: document.getElementById('agent-target-select'),
+    messages: document.getElementById('agent-messages'),
+    input: document.getElementById('agent-input'),
+    sendBtn: document.getElementById('agent-send'),
+    deleteBtn: document.getElementById('agent-delete-session'),
+    confirmBar: document.getElementById('agent-confirm-bar'),
+  };
+
+  let sessions = [];
+  let savedConnections = [];
+  let activeSessionId = null;
+  let sending = false;
+
+  const confirm = createConfirmController({
+    confirmEl: els.confirmBar,
+    api,
+    showToast,
+    getActiveSessionId: () => activeSessionId,
+  });
+
+  const unsubConfirm = confirmBus.subscribe((req) => {
+    if (activeSessionId) confirm.onConfirmRequest(req);
+  });
 
   function showWorkbench(show) {
     els.browser?.classList.toggle('hidden', show);
@@ -161,66 +473,11 @@ function createAgentModule(deps) {
     showWorkbench(true);
     await loadConnections();
     await renderMessages();
-    showConfirmForActiveSession();
-  }
-
-  function riskLabel(level) {
-    if (level === 'danger') return '高危';
-    if (level === 'write') return '写操作';
-    return '只读';
+    confirm.showConfirmForActiveSession();
   }
 
   function hideConfirmBar() {
-    if (!els.confirmBar) return;
-    els.confirmBar.classList.add('hidden');
-    els.confirmBar.innerHTML = '';
-  }
-
-  function renderConfirmBar(req) {
-    if (!els.confirmBar) return;
-    const argsText = JSON.stringify(req.args ?? {}, null, 2);
-    els.confirmBar.classList.remove('hidden');
-    els.confirmBar.innerHTML = `
-      <h3 id="agent-confirm-title" class="agent-confirm-title">需要确认：${escapeHtml(req.toolName || '')}</h3>
-      <p class="agent-confirm-meta">${escapeHtml(req.reason || '')} · 风险：${escapeHtml(riskLabel(req.riskLevel))}</p>
-      <pre class="agent-confirm-args">${escapeHtml(argsText)}</pre>
-      <div class="agent-confirm-actions">
-        <button type="button" class="btn-primary" data-decision="allow-once">允许一次</button>
-        <button type="button" class="btn-secondary" data-decision="allow-session">允许本会话同类</button>
-        <button type="button" class="btn-text" data-decision="deny">拒绝</button>
-      </div>
-    `;
-    els.confirmBar.querySelectorAll('[data-decision]').forEach((btn) => {
-      btn.addEventListener('click', async () => {
-        const decision = btn.getAttribute('data-decision');
-        await respondConfirm(req.confirmId, decision);
-      });
-    });
-    els.confirmBar.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
-  }
-
-  async function respondConfirm(confirmId, decision) {
-    try {
-      await api.agentConfirmResponse({ confirmId, decision });
-    } catch (err) {
-      showToast(`确认响应失败: ${err.message}`, 'error');
-      return;
-    }
-    const sessionId = dequeueConfirm(confirmId);
-    if (sessionId === sessionKey(activeSessionId)) {
-      showConfirmForActiveSession();
-    }
-  }
-
-  function onConfirmRequest(req) {
-    if (!req?.confirmId) return;
-    enqueueConfirm(req);
-    if (req.agentSessionId && req.agentSessionId !== activeSessionId) {
-      showToast(`会话 ${req.toolName || '工具'} 等待确认`, 'info', 4000);
-      return;
-    }
-    const front = frontConfirmForSession(activeSessionId);
-    if (front?.confirmId === req.confirmId) renderConfirmBar(req);
+    confirm.hideConfirmBar();
   }
 
   function renderTargetSelect(session) {
@@ -245,50 +502,6 @@ function createAgentModule(deps) {
     } catch (err) {
       showToast(`绑定目标失败: ${err.message}`, 'error');
     }
-  }
-
-  function renderToolCards(toolCalls) {
-    if (!toolCalls?.length) return '';
-    const cards = toolCalls
-      .map((tc) => {
-        const name = tc.function?.name || 'unknown';
-        const args = tc.function?.arguments || '{}';
-        return `<details class="agent-tool-card"><summary>🔧 ${escapeHtml(name)}</summary><pre>${escapeHtml(args)}</pre></details>`;
-      })
-      .join('');
-    return `<div class="agent-tool-cards">${cards}</div>`;
-  }
-
-  function renderMessageBubble(msg) {
-    const div = document.createElement('div');
-    div.className = `agent-msg agent-msg-${msg.role}`;
-    const roleLabel =
-      msg.role === 'user'
-        ? '你'
-        : msg.role === 'assistant'
-          ? '助手'
-          : msg.role === 'system'
-            ? '系统'
-            : msg.role === 'tool'
-              ? `工具 · ${msg.name || ''}`
-              : '工具';
-    const truncatedNote = msg.truncated ? ' <span class="agent-truncated">(已截断)</span>' : '';
-    const toolCards = msg.role === 'assistant' ? renderToolCards(msg.toolCalls) : '';
-    let body = escapeHtml(msg.content || '');
-    if (msg.role === 'tool' && msg.content) {
-      try {
-        const parsed = JSON.parse(msg.content);
-        body = escapeHtml(JSON.stringify(parsed, null, 2));
-      } catch (_) {
-        /* keep raw */
-      }
-    }
-    div.innerHTML = `
-      <div class="agent-msg-role">${escapeHtml(roleLabel)}${truncatedNote}</div>
-      <div class="agent-msg-body">${body}</div>
-      ${toolCards}
-    `;
-    return div;
   }
 
   async function renderMessages() {
@@ -363,7 +576,6 @@ function createAgentModule(deps) {
         sendMessage();
       }
     });
-    api.onAgentConfirmRequest?.(onConfirmRequest);
   }
 
   bindEvents();
@@ -371,13 +583,15 @@ function createAgentModule(deps) {
 
   return {
     loadSessions,
+    openSessionInWorkbench: openSession,
     isInWorkbench: () => !!activeSessionId,
     leaveWorkbench: () => {
       activeSessionId = null;
       hideConfirmBar();
       showWorkbench(false);
     },
+    destroy: () => unsubConfirm(),
   };
 }
 
-window.LocalWebSSHAgent = { createAgentModule };
+window.LocalWebSSHAgent = { createAgentModule, createSessionAgentPanel };

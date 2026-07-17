@@ -21,6 +21,21 @@ const L2_FILES = [
   'src/agent-ui.js',
 ];
 
+const L3_FILES = [
+  ...L2_FILES,
+  'main/agent/policy.js',
+  'main/agent/policy.test.js',
+  'main/agent/runtime.js',
+  'main/agent/runtime.test.js',
+  'main/agent/tools/registry.js',
+  'main/agent/tools/index.js',
+  'main/agent/tools/meta.js',
+  'main/agent/tools/server.js',
+  'main/agent/tools/ssh-read.js',
+  'main/agent/tools/metrics-tool.js',
+  'main/agent/tools/sftp-read.js',
+];
+
 function parseLayer(argv) {
   const arg = argv.find((a) => a.startsWith('--layer='));
   return arg ? Number(arg.split('=')[1]) : 1;
@@ -62,6 +77,17 @@ function checkPreloadExports() {
   }
 }
 
+function checkL3PreloadExports() {
+  const preloadPath = path.join(root, 'main/preload.js');
+  const src = existsSync(preloadPath) ? readFileSync(preloadPath, 'utf8') : '';
+  const required = ['agentSend:', 'agentSetTargets:'];
+  const missing = required.filter((name) => !src.includes(name));
+  if (missing.length) {
+    console.error('Missing L3 preload exports:', missing.join(', '));
+    process.exit(1);
+  }
+}
+
 function checkHtmlIds() {
   const htmlPath = path.join(root, 'src/index.html');
   const html = existsSync(htmlPath) ? readFileSync(htmlPath, 'utf8') : '';
@@ -69,6 +95,17 @@ function checkHtmlIds() {
   const missing = required.filter((id) => !html.includes(id));
   if (missing.length) {
     console.error('Missing HTML markers:', missing.join(', '));
+    process.exit(1);
+  }
+}
+
+function checkL3HtmlIds() {
+  const htmlPath = path.join(root, 'src/index.html');
+  const html = existsSync(htmlPath) ? readFileSync(htmlPath, 'utf8') : '';
+  const required = ['agent-target-select'];
+  const missing = required.filter((id) => !html.includes(id));
+  if (missing.length) {
+    console.error('Missing L3 HTML markers:', missing.join(', '));
     process.exit(1);
   }
 }
@@ -85,6 +122,19 @@ if (layer === 1) {
   checkHtmlIds();
   runTests('main/agent/llm-client.test.js', 'main/agent/sessions.test.js');
   console.log('L2 OK');
+} else if (layer === 3) {
+  checkFiles(L3_FILES);
+  checkPreloadExports();
+  checkL3PreloadExports();
+  checkHtmlIds();
+  checkL3HtmlIds();
+  runTests(
+    'main/agent/llm-client.test.js',
+    'main/agent/sessions.test.js',
+    'main/agent/policy.test.js',
+    'main/agent/runtime.test.js'
+  );
+  console.log('L3 OK');
 } else {
   console.error(`Unknown or unsupported layer: ${layer}`);
   process.exit(1);

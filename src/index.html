@@ -104,6 +104,12 @@
           <header class="agent-wb-header">
             <button type="button" id="agent-wb-back" class="btn-secondary agent-back-btn">← 对话列表</button>
             <h2 id="agent-wb-title" class="agent-wb-title">新对话</h2>
+            <div id="agent-target-bar" class="agent-target-bar">
+              <label for="agent-target-select" class="agent-target-label">目标</label>
+              <select id="agent-target-select" class="agent-target-select" title="绑定已保存服务器">
+                <option value="">未绑定</option>
+              </select>
+            </div>
             <button type="button" id="agent-delete-session" class="btn-text agent-delete-btn" title="删除此对话">删除</button>
           </header>
           <div id="agent-messages" class="agent-messages" role="log" aria-live="polite"></div>

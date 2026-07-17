@@ -10,6 +10,21 @@ function normalizeContent(content) {
   return { content: text.slice(0, MAX_CONTENT_LENGTH), truncated: true };
 }
 
+function normalizeToolCalls(toolCalls) {
+  if (!Array.isArray(toolCalls)) return undefined;
+  const serialized = JSON.stringify(toolCalls);
+  if (serialized.length <= MAX_CONTENT_LENGTH) return toolCalls;
+  return toolCalls.map((tc) => ({
+    id: tc.id,
+    type: tc.type,
+    function: {
+      name: tc.function?.name,
+      arguments: String(tc.function?.arguments || '').slice(0, 2000),
+    },
+    truncated: true,
+  }));
+}
+
 function createAgentSessionsModule({ store: injectedStore, Store: StoreClass } = {}) {
   const Store = StoreClass || require('electron-store');
   const store = injectedStore || new Store({ name: 'agent-sessions' });
@@ -68,7 +83,9 @@ function createAgentSessionsModule({ store: injectedStore, Store: StoreClass } =
       createdAt: partial.createdAt || Date.now(),
     };
     if (truncated) msg.truncated = true;
-    if (partial.toolCalls) msg.toolCalls = partial.toolCalls;
+    if (partial.toolCalls) msg.toolCalls = normalizeToolCalls(partial.toolCalls);
+    if (partial.toolCallId) msg.toolCallId = partial.toolCallId;
+    if (partial.name) msg.name = partial.name;
 
     sessions[idx].messages.push(msg);
     sessions[idx].updatedAt = Date.now();
@@ -82,6 +99,16 @@ function createAgentSessionsModule({ store: injectedStore, Store: StoreClass } =
     return sessions[idx];
   }
 
+  function setTargets(id, targets) {
+    const sessions = getSessionsArray();
+    const idx = sessions.findIndex((s) => s.id === id);
+    if (idx < 0) throw new Error('会话不存在');
+    sessions[idx].targets = Array.isArray(targets) ? targets : [];
+    sessions[idx].updatedAt = Date.now();
+    saveSessionsArray(sessions);
+    return sessions[idx];
+  }
+
   function deleteSession(id) {
     const sessions = getSessionsArray();
     const next = sessions.filter((s) => s.id !== id);
@@ -90,7 +117,7 @@ function createAgentSessionsModule({ store: injectedStore, Store: StoreClass } =
     return true;
   }
 
-  return { listSessions, createSession, getSession, appendMessage, deleteSession };
+  return { listSessions, createSession, getSession, appendMessage, setTargets, deleteSession };
 }
 
-module.exports = { createAgentSessionsModule, MAX_CONTENT_LENGTH };
+module.exports = { createAgentSessionsModule, MAX_CONTENT_LENGTH, normalizeToolCalls };

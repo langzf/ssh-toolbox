@@ -61,4 +61,9 @@ function registerMetricsIpc(ipcMain, sessions) {
   });
 }
 
-module.exports = { registerMetricsIpc, execOnSession };
+module.exports = {
+  registerMetricsIpc,
+  execOnSession,
+  buildMetricsCommand,
+  parseMetricsOutput,
+};

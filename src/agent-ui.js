@@ -9,6 +9,7 @@ function createAgentModule(deps) {
     sessionCount: document.getElementById('agent-count'),
     workbench: document.getElementById('agent-workbench'),
     wbTitle: document.getElementById('agent-wb-title'),
+    targetSelect: document.getElementById('agent-target-select'),
     messages: document.getElementById('agent-messages'),
     input: document.getElementById('agent-input'),
     sendBtn: document.getElementById('agent-send'),
@@ -16,6 +17,7 @@ function createAgentModule(deps) {
   };
 
   let sessions = [];
+  let savedConnections = [];
   let activeSessionId = null;
   let sending = false;
 
@@ -24,6 +26,15 @@ function createAgentModule(deps) {
     els.workbench?.classList.toggle('hidden', !show);
     if (show) onEnterWorkbench?.();
     else onLeaveWorkbench?.();
+  }
+
+  async function loadConnections() {
+    try {
+      savedConnections = await api.listConnections();
+      if (!Array.isArray(savedConnections)) savedConnections = [];
+    } catch (_) {
+      savedConnections = [];
+    }
   }
 
   async function loadSessions() {
@@ -103,24 +114,74 @@ function createAgentModule(deps) {
   async function openSession(id) {
     activeSessionId = id;
     showWorkbench(true);
+    await loadConnections();
     await renderMessages();
   }
 
-  function chatHistoryFromMessages(messages) {
-    return messages
-      .filter((m) => m.role === 'user' || m.role === 'assistant')
-      .map((m) => ({ role: m.role, content: m.content }));
+  function renderTargetSelect(session) {
+    if (!els.targetSelect) return;
+    const current = session?.targets?.find((t) => t.type === 'ssh')?.serverId || '';
+    els.targetSelect.innerHTML = '<option value="">未绑定</option>';
+    for (const c of savedConnections) {
+      const opt = document.createElement('option');
+      opt.value = c.id;
+      opt.textContent = c.label || c.host || c.id;
+      if (c.id === current) opt.selected = true;
+      els.targetSelect.appendChild(opt);
+    }
+  }
+
+  async function onTargetChange() {
+    if (!activeSessionId || !els.targetSelect) return;
+    const serverId = els.targetSelect.value;
+    const targets = serverId ? [{ type: 'ssh', serverId }] : [];
+    try {
+      await api.agentSetTargets(activeSessionId, targets);
+    } catch (err) {
+      showToast(`绑定目标失败: ${err.message}`, 'error');
+    }
+  }
+
+  function renderToolCards(toolCalls) {
+    if (!toolCalls?.length) return '';
+    const cards = toolCalls
+      .map((tc) => {
+        const name = tc.function?.name || 'unknown';
+        const args = tc.function?.arguments || '{}';
+        return `<details class="agent-tool-card"><summary>🔧 ${escapeHtml(name)}</summary><pre>${escapeHtml(args)}</pre></details>`;
+      })
+      .join('');
+    return `<div class="agent-tool-cards">${cards}</div>`;
   }
 
   function renderMessageBubble(msg) {
     const div = document.createElement('div');
     div.className = `agent-msg agent-msg-${msg.role}`;
     const roleLabel =
-      msg.role === 'user' ? '你' : msg.role === 'assistant' ? '助手' : msg.role === 'system' ? '系统' : '工具';
+      msg.role === 'user'
+        ? '你'
+        : msg.role === 'assistant'
+          ? '助手'
+          : msg.role === 'system'
+            ? '系统'
+            : msg.role === 'tool'
+              ? `工具 · ${msg.name || ''}`
+              : '工具';
     const truncatedNote = msg.truncated ? ' <span class="agent-truncated">(已截断)</span>' : '';
+    const toolCards = msg.role === 'assistant' ? renderToolCards(msg.toolCalls) : '';
+    let body = escapeHtml(msg.content || '');
+    if (msg.role === 'tool' && msg.content) {
+      try {
+        const parsed = JSON.parse(msg.content);
+        body = escapeHtml(JSON.stringify(parsed, null, 2));
+      } catch (_) {
+        /* keep raw */
+      }
+    }
     div.innerHTML = `
       <div class="agent-msg-role">${escapeHtml(roleLabel)}${truncatedNote}</div>
-      <div class="agent-msg-body">${escapeHtml(msg.content || '')}</div>
+      <div class="agent-msg-body">${body}</div>
+      ${toolCards}
     `;
     return div;
   }
@@ -138,6 +199,7 @@ function createAgentModule(deps) {
         return;
       }
       if (els.wbTitle) els.wbTitle.textContent = session.title || '新对话';
+      renderTargetSelect(session);
       for (const msg of session.messages || []) {
         els.messages.appendChild(renderMessageBubble(msg));
       }
@@ -157,15 +219,7 @@ function createAgentModule(deps) {
     els.input.value = '';
 
     try {
-      await api.agentAppendMessage(activeSessionId, { role: 'user', content: text });
-      await renderMessages();
-      await loadSessions();
-
-      const session = await api.agentGetSession(activeSessionId);
-      const history = chatHistoryFromMessages(session?.messages || []);
-      const reply = await api.agentChat({ messages: history });
-      const content = reply?.content ?? String(reply ?? '');
-      await api.agentAppendMessage(activeSessionId, { role: 'assistant', content });
+      await api.agentSend({ agentSessionId: activeSessionId, userText: text });
       await renderMessages();
       await loadSessions();
     } catch (err) {
@@ -195,6 +249,7 @@ function createAgentModule(deps) {
     els.deleteBtn?.addEventListener('click', () => {
       if (activeSessionId) deleteSession(activeSessionId);
     });
+    els.targetSelect?.addEventListener('change', onTargetChange);
     els.sendBtn?.addEventListener('click', sendMessage);
     els.input?.addEventListener('keydown', (e) => {
       if (e.key === 'Enter' && !e.shiftKey) {

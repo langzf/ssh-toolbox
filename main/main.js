@@ -190,7 +190,7 @@ ipcMain.handle('snippets-save', (_event, items) => {
   return snippetStore.get('items', []);
 });
 
-ipcMain.handle('ssh-connect', async (_event, config) => {
+function connectSsh(config) {
   const {
     sessionId,
     host,
@@ -274,7 +274,9 @@ ipcMain.handle('ssh-connect', async (_event, config) => {
       })
       .connect(base);
   });
-});
+}
+
+ipcMain.handle('ssh-connect', async (_event, config) => connectSsh(config));
 
 function cleanupSession(sessionId) {
   const entry = sessions.get(sessionId);
@@ -297,9 +299,31 @@ function cleanupSession(sessionId) {
   sessions.delete(sessionId);
 }
 
+function getConnectionCredential(connectionId) {
+  if (!connectionId) return null;
+  const record = credentialStore.get(connectionId);
+  if (!record) return null;
+  try {
+    return {
+      password: decryptSecret(record.password) || '',
+      passphrase: decryptSecret(record.passphrase) || '',
+    };
+  } catch (err) {
+    credentialStore.delete(connectionId);
+    return null;
+  }
+}
+
 registerSftpIpc(ipcMain, sessions, () => mainWindow);
 registerMetricsIpc(ipcMain, sessions);
-registerAgentIpc(ipcMain, { encryptSecret, decryptSecret });
+registerAgentIpc(ipcMain, {
+  encryptSecret,
+  decryptSecret,
+  sshSessions: sessions,
+  connectSsh,
+  getConnections: () => store.get('items', []),
+  getCredential: getConnectionCredential,
+});
 
 ipcMain.handle('ssh-disconnect', (_event, sessionId) => {
   cleanupSession(sessionId);

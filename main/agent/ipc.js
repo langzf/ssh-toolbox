@@ -4,6 +4,7 @@ const { chatCompletion } = require('./llm-client');
 const { runAgentTurn } = require('./runtime');
 const { createDefaultRegistry } = require('./tools');
 const { createConfirmManager } = require('./confirm');
+const { createNoopChannelAdapter } = require('./channel-adapter');
 
 const SIMPLE_SYSTEM_PROMPT =
   '你是 SSH 工具箱助手，帮助用户管理 SSH 连接、远程命令与服务器运维。请用简洁清晰的中文回答。';
@@ -21,6 +22,7 @@ function registerAgentIpc(ipcMain, deps) {
     getConnections,
     getCredential,
     getWebContents,
+    channelAdapter = createNoopChannelAdapter(),
   } = deps;
 
   const agentSettings = createAgentSettingsModule({ encryptSecret, decryptSecret });
@@ -125,6 +127,7 @@ function registerAgentIpc(ipcMain, deps) {
         settings,
         apiKey,
         requestConfirm,
+        channelAdapter,
         sessionAllowSet,
         buildContext: (agentSession) => buildContext(agentSession),
       },

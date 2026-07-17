@@ -53,6 +53,12 @@ npm run pack
 - SFTP：浏览、上传、下载、新建文件夹、删除
 - **监控**：CPU、内存、磁盘、负载；NVIDIA GPU（需 `nvidia-smi`）
 - 多主题、多标签会话
+- **Agent 会话**：侧栏或 SSH 会话内 Agent 页，自然语言驱动 SSH/K8s 运维（需设置 Base URL、API Key、模型）；写/高危操作需确认
+- **K8s**：导入 kubeconfig、浏览 Pod、日志、指标、确认后 exec/删 Pod
+
+## Agent 设置
+
+在应用设置 → Agent 中配置 OpenAI 兼容 **Base URL**、**API Key**（本机加密存储）、**Model** 与策略档位。远程通道（飞书/微信）为二期预留，当前使用桌面本地确认。
 
 ## 项目结构
 

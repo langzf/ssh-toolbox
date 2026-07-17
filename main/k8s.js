@@ -272,6 +272,94 @@ async function startExec(clusterId, contextName, namespace, podName, container, 
   return execId;
 }
 
+function normalizeExecCommand(command) {
+  if (Array.isArray(command)) {
+    const parts = command.map((c) => String(c).trim()).filter(Boolean);
+    if (!parts.length) throw new Error('command 不能为空');
+    return parts;
+  }
+  const text = String(command || '').trim();
+  if (!text) throw new Error('command 不能为空');
+  return ['/bin/sh', '-c', text];
+}
+
+function parseExecExitCode(status) {
+  if (!status) return null;
+  if (status.status === 'Success') return 0;
+  if (typeof status.code === 'number') return status.code;
+  return 1;
+}
+
+async function execPodCommand(
+  clusterId,
+  contextName,
+  namespace,
+  podName,
+  container,
+  command,
+  timeoutMs = 20000
+) {
+  const { k8s, kc } = await getClient(clusterId, contextName);
+  const execApi = new k8s.Exec(kc);
+  const cmd = normalizeExecCommand(command);
+
+  const stdout = new PassThrough();
+  const stderr = new PassThrough();
+  const stdoutChunks = [];
+  const stderrChunks = [];
+  stdout.on('data', (buf) => stdoutChunks.push(buf));
+  stderr.on('data', (buf) => stderrChunks.push(buf));
+
+  let conn;
+  let exitStatus = null;
+
+  await new Promise((resolve, reject) => {
+    const timer = setTimeout(() => {
+      try {
+        conn?.close?.();
+      } catch (_) {
+        /* ignore */
+      }
+      reject(new Error(`Pod exec 超时 (${timeoutMs}ms)`));
+    }, timeoutMs);
+
+    execApi
+      .exec(namespace, podName, container, cmd, stdout, stderr, null, false, (status) => {
+        clearTimeout(timer);
+        exitStatus = status;
+        resolve(status);
+      })
+      .then((c) => {
+        conn = c;
+      })
+      .catch((err) => {
+        clearTimeout(timer);
+        reject(err);
+      });
+  });
+
+  const stdoutText = Buffer.concat(stdoutChunks).toString('utf8');
+  const stderrText = Buffer.concat(stderrChunks).toString('utf8');
+  const exitCode = parseExecExitCode(exitStatus);
+  const maxChars = 64000;
+  const combined = [stdoutText, stderrText].filter(Boolean).join('\n');
+  const truncated = combined.length > maxChars;
+
+  return {
+    command: cmd,
+    stdout: truncated ? stdoutText.slice(-maxChars) : stdoutText,
+    stderr: truncated ? stderrText.slice(-maxChars) : stderrText,
+    exitCode,
+    truncated,
+  };
+}
+
+async function deletePod(clusterId, contextName, namespace, podName) {
+  const { core } = await getClient(clusterId, contextName);
+  await core.deleteNamespacedPod({ name: podName, namespace });
+  return { namespace, podName, deleted: true };
+}
+
 function parseCpuQuantity(q) {
   if (!q) return 0;
   const s = String(q);
@@ -563,5 +651,7 @@ module.exports = {
   listPods,
   readPodLogs,
   fetchPodMetrics,
+  execPodCommand,
+  deletePod,
   apiListItems,
 };

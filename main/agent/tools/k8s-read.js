@@ -184,4 +184,4 @@ function createK8sReadTools(k8sApi = require('../../k8s')) {
   return [listClusters, listNamespaces, listPods, podLogs, metrics];
 }
 
-module.exports = { createK8sReadTools, resolveK8sTarget };
+module.exports = { createK8sReadTools, resolveK8sTarget, resolveNamespace };

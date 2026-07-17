@@ -62,6 +62,13 @@ const L7_FILES = [
   'main/agent/tools/k8s-read.test.js',
 ];
 
+const L8_FILES = [
+  ...L7_FILES,
+  'main/agent/tools/k8s-write.js',
+  'main/agent/tools/k8s-write.test.js',
+  'main/agent/channel-adapter.js',
+];
+
 function checkL6HtmlIds() {
   const htmlPath = path.join(root, 'src/index.html');
   const html = existsSync(htmlPath) ? readFileSync(htmlPath, 'utf8') : '';
@@ -185,6 +192,70 @@ function checkL7K8sExports() {
   const missing = required.filter((name) => !src.includes(name));
   if (missing.length) {
     console.error('Missing L7 k8s exports:', missing.join(', '));
+    process.exit(1);
+  }
+}
+
+function checkL8K8sWriteTools() {
+  const toolsPath = path.join(root, 'main/agent/tools/k8s-write.js');
+  const src = existsSync(toolsPath) ? readFileSync(toolsPath, 'utf8') : '';
+  const required = ['k8s.pod_exec', 'k8s.delete_pod', "RISK.WRITE", "RISK.DANGER"];
+  const missing = required.filter((name) => !src.includes(name));
+  if (missing.length) {
+    console.error('Missing L8 k8s write tools:', missing.join(', '));
+    process.exit(1);
+  }
+}
+
+function checkL8ChannelAdapter() {
+  const adapterPath = path.join(root, 'main/agent/channel-adapter.js');
+  const src = existsSync(adapterPath) ? readFileSync(adapterPath, 'utf8') : '';
+  const required = ['createNoopChannelAdapter', '远程通道未启用（二期）', "return 'deny'"];
+  const missing = required.filter((name) => !src.includes(name));
+  if (missing.length) {
+    console.error('Missing L8 channel adapter:', missing.join(', '));
+    process.exit(1);
+  }
+}
+
+function checkL8Registry() {
+  const indexPath = path.join(root, 'main/agent/tools/index.js');
+  const src = existsSync(indexPath) ? readFileSync(indexPath, 'utf8') : '';
+  if (!src.includes('createK8sWriteTools')) {
+    console.error('Missing L8 registry: createK8sWriteTools');
+    process.exit(1);
+  }
+}
+
+function checkL8K8sExports() {
+  const k8sPath = path.join(root, 'main/k8s.js');
+  const src = existsSync(k8sPath) ? readFileSync(k8sPath, 'utf8') : '';
+  const required = ['execPodCommand', 'deletePod'];
+  const missing = required.filter((name) => !src.includes(name));
+  if (missing.length) {
+    console.error('Missing L8 k8s exports:', missing.join(', '));
+    process.exit(1);
+  }
+}
+
+function checkL8Runtime() {
+  const ipcPath = path.join(root, 'main/agent/ipc.js');
+  const src = existsSync(ipcPath) ? readFileSync(ipcPath, 'utf8') : '';
+  const required = ['createNoopChannelAdapter', 'channelAdapter'];
+  const missing = required.filter((name) => !src.includes(name));
+  if (missing.length) {
+    console.error('Missing L8 runtime wiring:', missing.join(', '));
+    process.exit(1);
+  }
+}
+
+function checkL8Readme() {
+  const readmePath = path.join(root, 'README.md');
+  const src = existsSync(readmePath) ? readFileSync(readmePath, 'utf8') : '';
+  const required = ['Agent', 'Base URL', 'API Key'];
+  const missing = required.filter((name) => !src.includes(name));
+  if (missing.length) {
+    console.error('Missing L8 README Agent section:', missing.join(', '));
     process.exit(1);
   }
 }
@@ -401,6 +472,41 @@ if (layer === 1) {
     'main/agent/tools/k8s-read.test.js'
   );
   console.log('L7 OK');
+} else if (layer === 8) {
+  checkFiles(L8_FILES);
+  checkPreloadExports();
+  checkL3PreloadExports();
+  checkL4PreloadExports();
+  checkL7PreloadExports();
+  checkHtmlIds();
+  checkL3HtmlIds();
+  checkL4HtmlIds();
+  checkL6HtmlIds();
+  checkL7HtmlIds();
+  checkL6AgentUi();
+  checkL7AgentUi();
+  checkL6Renderer();
+  checkL7Renderer();
+  checkL4Ipc();
+  checkL7Main();
+  checkL7K8sTools();
+  checkL7K8sExports();
+  checkL8K8sWriteTools();
+  checkL8ChannelAdapter();
+  checkL8Registry();
+  checkL8K8sExports();
+  checkL8Runtime();
+  checkL8Readme();
+  runTests(
+    'main/agent/llm-client.test.js',
+    'main/agent/sessions.test.js',
+    'main/agent/policy.test.js',
+    'main/agent/runtime.test.js',
+    'main/agent/confirm.test.js',
+    'main/agent/tools/k8s-read.test.js',
+    'main/agent/tools/k8s-write.test.js'
+  );
+  console.log('L8 OK');
 } else {
   console.error(`Unknown or unsupported layer: ${layer}`);
   process.exit(1);

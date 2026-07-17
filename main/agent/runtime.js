@@ -117,9 +117,11 @@ async function runAgentTurn(deps, { agentSessionId, userText }) {
     settings,
     apiKey,
     requestConfirm,
+    channelAdapter,
     buildContext,
     sessionAllowSet,
   } = deps;
+  void channelAdapter;
 
   const session = agentSessions.getSession(agentSessionId);
   if (!session) throw new Error('会话不存在');

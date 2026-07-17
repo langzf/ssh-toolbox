@@ -1,8 +1,5 @@
 const { RISK } = require('../types');
-const { classifyCommand } = require('../policy');
 const { execOnSession } = require('../../metrics');
-
-const WRITE_REFUSAL = '需升级到写操作层（L5）后才可执行写/高危命令';
 
 function resolveSshSessionId(ctx) {
   const targets = ctx.agentSession?.targets || [];
@@ -12,39 +9,6 @@ function resolveSshSessionId(ctx) {
 }
 
 function createSshReadTools() {
-  const sshExec = {
-    name: 'ssh.exec',
-    description: '在已绑定服务器上执行只读 Shell 命令（写/高危命令在 L3 会被拒绝）',
-    riskLevel: 'dynamic',
-    available: true,
-    inputSchema: {
-      type: 'object',
-      properties: {
-        command: { type: 'string', description: '要执行的 shell 命令' },
-        timeoutMs: { type: 'number', description: '超时毫秒，默认 20000' },
-      },
-      required: ['command'],
-    },
-    async execute(args, ctx) {
-      const command = String(args.command || '').trim();
-      if (!command) return { ok: false, error: '缺少 command' };
-
-      const risk = classifyCommand(command);
-      if (risk !== RISK.READ) {
-        return { ok: false, error: WRITE_REFUSAL, riskLevel: risk };
-      }
-
-      try {
-        const sessionId = await resolveSshSessionId(ctx);
-        const timeoutMs = Number(args.timeoutMs) || 20000;
-        const output = await execOnSession(ctx.sessions, sessionId, command, timeoutMs);
-        return { ok: true, data: { output, riskLevel: RISK.READ } };
-      } catch (err) {
-        return { ok: false, error: err.message || String(err) };
-      }
-    },
-  };
-
   const tailLog = {
     name: 'ssh.tail_log',
     description: '读取远程日志文件末尾若干行',
@@ -75,7 +39,7 @@ function createSshReadTools() {
     },
   };
 
-  return [sshExec, tailLog];
+  return [tailLog];
 }
 
-module.exports = { createSshReadTools, WRITE_REFUSAL };
+module.exports = { createSshReadTools };

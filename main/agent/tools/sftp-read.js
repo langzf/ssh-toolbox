@@ -98,40 +98,7 @@ function createSftpReadTools() {
     },
   };
 
-  const sftpWrite = {
-    name: 'sftp.write',
-    description: '写入远程文件（L5 启用）',
-    riskLevel: RISK.WRITE,
-    available: false,
-    inputSchema: { type: 'object', properties: {} },
-    async execute() {
-      return { ok: false, error: '工具尚未启用' };
-    },
-  };
-
-  const sftpUpload = {
-    name: 'sftp.upload',
-    description: '上传本地文件到远程（L5 启用）',
-    riskLevel: RISK.WRITE,
-    available: false,
-    inputSchema: { type: 'object', properties: {} },
-    async execute() {
-      return { ok: false, error: '工具尚未启用' };
-    },
-  };
-
-  const sftpDelete = {
-    name: 'sftp.delete',
-    description: '删除远程文件或目录（L5 启用）',
-    riskLevel: RISK.DANGER,
-    available: false,
-    inputSchema: { type: 'object', properties: {} },
-    async execute() {
-      return { ok: false, error: '工具尚未启用' };
-    },
-  };
-
-  return [sftpList, sftpRead, sftpWrite, sftpUpload, sftpDelete];
+  return [sftpList, sftpRead];
 }
 
 module.exports = { createSftpReadTools };

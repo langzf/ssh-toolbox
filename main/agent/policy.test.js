@@ -1,6 +1,6 @@
 const { test } = require('node:test');
 const assert = require('node:assert/strict');
-const { classifyCommand, decide } = require('./policy');
+const { classifyCommand, classifySftpDelete, decide } = require('./policy');
 const { RISK, POLICY } = require('./types');
 
 test('classifyCommand: df -h is read', () => {
@@ -47,4 +47,17 @@ test('decide: relaxed danger → confirm', () => {
 test('decide: session allow set bypasses confirm', () => {
   const allowed = new Set([RISK.WRITE]);
   assert.equal(decide(RISK.WRITE, POLICY.STANDARD, allowed), 'auto');
+});
+
+test('classifySftpDelete: specific file is write', () => {
+  assert.equal(classifySftpDelete('/tmp/agent-test.txt'), RISK.WRITE);
+  assert.equal(classifySftpDelete('/var/log/nginx/access.log'), RISK.WRITE);
+});
+
+test('classifySftpDelete: root or home broad paths are danger', () => {
+  assert.equal(classifySftpDelete('/'), RISK.DANGER);
+  assert.equal(classifySftpDelete('$HOME'), RISK.DANGER);
+  assert.equal(classifySftpDelete('~'), RISK.DANGER);
+  assert.equal(classifySftpDelete('/home'), RISK.DANGER);
+  assert.equal(classifySftpDelete('/root'), RISK.DANGER);
 });

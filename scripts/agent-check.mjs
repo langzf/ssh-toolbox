@@ -41,6 +41,12 @@ const L4_FILES = [
   'main/agent/confirm.js',
 ];
 
+const L5_FILES = [
+  ...L4_FILES,
+  'main/agent/tools/ssh-write.js',
+  'main/agent/tools/sftp-write.js',
+];
+
 function parseLayer(argv) {
   const arg = argv.find((a) => a.startsWith('--layer='));
   return arg ? Number(arg.split('=')[1]) : 1;
@@ -188,6 +194,23 @@ if (layer === 1) {
     'main/agent/confirm.test.js'
   );
   console.log('L4 OK');
+} else if (layer === 5) {
+  checkFiles(L5_FILES);
+  checkPreloadExports();
+  checkL3PreloadExports();
+  checkL4PreloadExports();
+  checkHtmlIds();
+  checkL3HtmlIds();
+  checkL4HtmlIds();
+  checkL4Ipc();
+  runTests(
+    'main/agent/llm-client.test.js',
+    'main/agent/sessions.test.js',
+    'main/agent/policy.test.js',
+    'main/agent/runtime.test.js',
+    'main/agent/confirm.test.js'
+  );
+  console.log('L5 OK');
 } else {
   console.error(`Unknown or unsupported layer: ${layer}`);
   process.exit(1);

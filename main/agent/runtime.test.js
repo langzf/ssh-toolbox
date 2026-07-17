@@ -128,10 +128,11 @@ test('runAgentTurn: mock LLM tool call then final text', async () => {
   assert.match(msgs[3].content, /12%/);
 });
 
-test('runAgentTurn rejects write ssh.exec in L3', async () => {
+test('runAgentTurn: write ssh.exec confirms then executes on allow-once', async () => {
   const agentSessions = createMemorySessions();
   const session = agentSessions.createSession();
   let call = 0;
+  let executed = false;
 
   const sshTool = {
     name: 'ssh.exec',
@@ -139,7 +140,10 @@ test('runAgentTurn rejects write ssh.exec in L3', async () => {
     riskLevel: 'dynamic',
     available: true,
     inputSchema: { type: 'object', properties: { command: { type: 'string' } }, required: ['command'] },
-    execute: async () => ({ ok: true, data: { output: 'should not run' } }),
+    execute: async () => {
+      executed = true;
+      return { ok: true, data: { output: 'restarted', riskLevel: RISK.WRITE } };
+    },
   };
 
   const registry = {
@@ -171,7 +175,7 @@ test('runAgentTurn rejects write ssh.exec in L3', async () => {
         ],
       };
     }
-    return { choices: [{ message: { role: 'assistant', content: '无法执行写命令。' } }] };
+    return { choices: [{ message: { role: 'assistant', content: '已重启 nginx。' } }] };
   };
 
   await runAgentTurn(
@@ -179,7 +183,75 @@ test('runAgentTurn rejects write ssh.exec in L3', async () => {
       registry,
       agentSessions,
       chatCompletion,
-      settings: { model: 'm', maxSteps: 5 },
+      settings: { model: 'm', maxSteps: 5, policyMode: 'standard' },
+      apiKey: 'k',
+      requestConfirm: async () => 'allow-once',
+      buildContext: () => ({ agentSession: session, sessions: new Map() }),
+    },
+    { agentSessionId: session.id, userText: '重启 nginx' }
+  );
+
+  assert.equal(executed, true);
+  const toolMsg = agentSessions.getSession(session.id).messages.find((m) => m.role === 'tool');
+  assert.match(toolMsg.content, /restarted/);
+});
+
+test('runAgentTurn: write ssh.exec denied when user rejects confirm', async () => {
+  const agentSessions = createMemorySessions();
+  const session = agentSessions.createSession();
+  let call = 0;
+  let executed = false;
+
+  const sshTool = {
+    name: 'ssh.exec',
+    description: 'exec',
+    riskLevel: 'dynamic',
+    available: true,
+    inputSchema: { type: 'object', properties: { command: { type: 'string' } }, required: ['command'] },
+    execute: async () => {
+      executed = true;
+      return { ok: true, data: { output: 'should not run' } };
+    },
+  };
+
+  const registry = {
+    listAvailable: () => [sshTool],
+    toOpenAiTools: () => [
+      { type: 'function', function: { name: 'ssh.exec', description: 'exec', parameters: sshTool.inputSchema } },
+    ],
+    get: (name) => (name === 'ssh.exec' ? sshTool : null),
+  };
+
+  const chatCompletion = async () => {
+    call += 1;
+    if (call === 1) {
+      return {
+        choices: [
+          {
+            message: {
+              role: 'assistant',
+              content: '',
+              tool_calls: [
+                {
+                  id: 'call_w',
+                  type: 'function',
+                  function: { name: 'ssh.exec', arguments: JSON.stringify({ command: 'systemctl restart nginx' }) },
+                },
+              ],
+            },
+          },
+        ],
+      };
+    }
+    return { choices: [{ message: { role: 'assistant', content: '用户已拒绝。' } }] };
+  };
+
+  await runAgentTurn(
+    {
+      registry,
+      agentSessions,
+      chatCompletion,
+      settings: { model: 'm', maxSteps: 5, policyMode: 'standard' },
       apiKey: 'k',
       requestConfirm: async () => 'deny',
       buildContext: () => ({ agentSession: session, sessions: new Map() }),
@@ -187,6 +259,7 @@ test('runAgentTurn rejects write ssh.exec in L3', async () => {
     { agentSessionId: session.id, userText: '重启 nginx' }
   );
 
+  assert.equal(executed, false);
   const toolMsg = agentSessions.getSession(session.id).messages.find((m) => m.role === 'tool');
-  assert.match(toolMsg.content, /写操作层/);
+  assert.match(toolMsg.content, /用户拒绝/);
 });

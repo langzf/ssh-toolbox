@@ -1,8 +1,6 @@
 const { MAX_CONTENT_LENGTH } = require('./sessions');
 const { RISK } = require('./types');
-const { classifyCommand, decide } = require('./policy');
-
-const WRITE_REFUSAL = '需升级到写操作层（L5）后才可执行写/高危命令';
+const { classifyCommand, classifySftpDelete, decide } = require('./policy');
 
 function normalizePayload(value, maxLen = MAX_CONTENT_LENGTH) {
   const text = typeof value === 'string' ? value : JSON.stringify(value ?? null);
@@ -34,7 +32,7 @@ function buildSystemPrompt(tools) {
     '规则：',
     '1. 只能使用下列已注册且可用的工具，禁止臆造执行结果。',
     '2. 未绑定服务器时，先请用户选择目标或调用 server.list / agent.ask_user。',
-    '3. 只读命令可直接执行；写/高危命令在 L3 会被拒绝。',
+    '3. 只读命令可直接执行；写/高危命令需用户确认后执行。',
     '',
     '可用工具：',
     names,
@@ -70,9 +68,9 @@ function formatToolResult(result) {
 }
 
 function effectiveRisk(tool, args) {
-  if (tool.riskLevel === 'dynamic' && tool.name === 'ssh.exec') {
-    return classifyCommand(args.command);
-  }
+  if (tool.riskLevel !== 'dynamic') return tool.riskLevel;
+  if (tool.name === 'ssh.exec') return classifyCommand(args.command);
+  if (tool.name === 'sftp.delete') return classifySftpDelete(args.remotePath);
   return tool.riskLevel;
 }
 
@@ -84,10 +82,6 @@ function confirmReason(tool, args, risk) {
 async function handleToolPolicy(tool, args, requestConfirm, { policyMode, sessionAllowSet } = {}) {
   const risk = effectiveRisk(tool, args);
   const allowSet = sessionAllowSet || new Set();
-
-  if ((risk === RISK.WRITE || risk === RISK.DANGER) && tool.name !== 'server.connect') {
-    return { action: 'reject', error: WRITE_REFUSAL, riskLevel: risk };
-  }
 
   const policyAction = decide(risk, policyMode, allowSet);
 
@@ -238,5 +232,4 @@ module.exports = {
   normalizePayload,
   messagesForLlm,
   handleToolPolicy,
-  WRITE_REFUSAL,
 };

@@ -48,6 +48,22 @@ function classifyCommand(cmd) {
   return RISK.READ;
 }
 
+function normalizeDeletePath(remotePath) {
+  const raw = String(remotePath || '').trim();
+  if (!raw) return '';
+  if (raw === '/') return '/';
+  return raw.replace(/\/+$/, '');
+}
+
+/** Classify sftp.delete risk: broad root/home deletes → danger, else write. */
+function classifySftpDelete(remotePath) {
+  const p = normalizeDeletePath(remotePath);
+  if (!p || p === '/') return RISK.DANGER;
+  if (p === '~' || p === '$HOME' || p === '${HOME}') return RISK.DANGER;
+  if (/^\/home\/?$/i.test(p) || /^\/root\/?$/i.test(p)) return RISK.DANGER;
+  return RISK.WRITE;
+}
+
 /** @returns {'auto'|'confirm'|'deny'} */
 function decide(risk, policyMode, sessionAllowSet) {
   if (sessionAllowSet?.has(risk)) return 'auto';
@@ -69,4 +85,4 @@ function decide(risk, policyMode, sessionAllowSet) {
   return 'confirm';
 }
 
-module.exports = { classifyCommand, decide };
+module.exports = { classifyCommand, classifySftpDelete, decide };

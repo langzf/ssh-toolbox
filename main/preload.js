@@ -39,4 +39,9 @@ contextBridge.exposeInMainWorld('localWebSSH', {
   agentGetSettings: () => ipcRenderer.invoke('agent-settings-get'),
   agentSaveSettings: (s) => ipcRenderer.invoke('agent-settings-save', s),
   agentChat: (payload) => ipcRenderer.invoke('agent-chat', payload),
+  agentListSessions: () => ipcRenderer.invoke('agent-sessions-list'),
+  agentCreateSession: (payload) => ipcRenderer.invoke('agent-sessions-create', payload),
+  agentGetSession: (id) => ipcRenderer.invoke('agent-sessions-get', id),
+  agentAppendMessage: (id, msg) => ipcRenderer.invoke('agent-sessions-append-message', { id, msg }),
+  agentDeleteSession: (id) => ipcRenderer.invoke('agent-sessions-delete', id),
 });

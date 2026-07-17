@@ -1,4 +1,5 @@
 const { createAgentSettingsModule } = require('./settings');
+const { createAgentSessionsModule } = require('./sessions');
 const { chatCompletion } = require('./llm-client');
 
 const SYSTEM_PROMPT =
@@ -6,10 +7,23 @@ const SYSTEM_PROMPT =
 
 function registerAgentIpc(ipcMain, { encryptSecret, decryptSecret }) {
   const agentSettings = createAgentSettingsModule({ encryptSecret, decryptSecret });
+  const agentSessions = createAgentSessionsModule();
 
   ipcMain.handle('agent-settings-get', () => agentSettings.getPublicSettings());
 
   ipcMain.handle('agent-settings-save', (_event, partial) => agentSettings.saveSettings(partial));
+
+  ipcMain.handle('agent-sessions-list', () => agentSessions.listSessions());
+
+  ipcMain.handle('agent-sessions-create', (_event, payload) => agentSessions.createSession(payload || {}));
+
+  ipcMain.handle('agent-sessions-get', (_event, id) => agentSessions.getSession(id));
+
+  ipcMain.handle('agent-sessions-append-message', (_event, { id, msg }) =>
+    agentSessions.appendMessage(id, msg)
+  );
+
+  ipcMain.handle('agent-sessions-delete', (_event, id) => agentSessions.deleteSession(id));
 
   ipcMain.handle('agent-chat', async (_event, payload) => {
     const settings = agentSettings.getPublicSettings();

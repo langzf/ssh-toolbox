@@ -40,6 +40,11 @@
             <span class="nav-text">Snippets</span>
             <span id="snippet-count" class="nav-badge">0</span>
           </button>
+          <button type="button" class="nav-item" data-view="agent">
+            <span class="nav-icon">◆</span>
+            <span class="nav-text">Agent</span>
+            <span id="agent-count" class="nav-badge">0</span>
+          </button>
           <button type="button" class="nav-item disabled" disabled title="后续版本支持">
             <span class="nav-icon">⇄</span>
             <span class="nav-text">隧道代理</span>
@@ -84,6 +89,28 @@
             <button type="button" id="btn-new-snippet" class="btn-icon-action" title="新建片段">+</button>
           </header>
           <ul id="snippet-list" class="servers-browser-list"></ul>
+        </section>
+
+        <section id="agent-browser" class="main-panel agent-browser hidden" aria-label="Agent">
+          <header class="main-panel-header">
+            <h2>Agent 对话</h2>
+            <button type="button" id="btn-new-agent-session" class="btn-icon-action" title="新建对话">+</button>
+          </header>
+          <p class="agent-hint">与 AI 助手闲聊或后续驱动 SSH / K8s 运维。需在设置中配置 API Key。</p>
+          <ul id="agent-session-list" class="servers-browser-list"></ul>
+        </section>
+
+        <section id="agent-workbench" class="agent-workbench hidden" aria-label="Agent 工作台">
+          <header class="agent-wb-header">
+            <button type="button" id="agent-wb-back" class="btn-secondary agent-back-btn">← 对话列表</button>
+            <h2 id="agent-wb-title" class="agent-wb-title">新对话</h2>
+            <button type="button" id="agent-delete-session" class="btn-text agent-delete-btn" title="删除此对话">删除</button>
+          </header>
+          <div id="agent-messages" class="agent-messages" role="log" aria-live="polite"></div>
+          <footer class="agent-compose">
+            <textarea id="agent-input" rows="3" placeholder="输入消息，Enter 发送，Shift+Enter 换行…"></textarea>
+            <button type="button" id="agent-send" class="btn-primary">发送</button>
+          </footer>
         </section>
 
         <div id="welcome" class="welcome hidden">
@@ -243,6 +270,7 @@
     <script src="themes.js"></script>
     <script src="sftp-ui.js"></script>
     <script src="monitor-ui.js"></script>
+    <script src="agent-ui.js"></script>
     <script src="../node_modules/@xterm/xterm/lib/xterm.js"></script>
     <script src="../node_modules/@xterm/addon-fit/lib/addon-fit.js"></script>
     <script src="renderer.js"></script>

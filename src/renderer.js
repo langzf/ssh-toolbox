@@ -23,6 +23,9 @@ function bootCheck() {
   if (!window.LocalWebSSHMonitor) {
     errors.push('monitor-ui.js 未加载。');
   }
+  if (!window.LocalWebSSHAgent) {
+    errors.push('agent-ui.js 未加载。');
+  }
   try {
     createFitAddon();
   } catch (e) {
@@ -68,6 +71,8 @@ const els = {
   serversBrowser: document.getElementById('servers-browser'),
   serversBrowserList: document.getElementById('servers-browser-list'),
   snippetsBrowser: document.getElementById('snippets-browser'),
+  agentBrowser: document.getElementById('agent-browser'),
+  agentWorkbench: document.getElementById('agent-workbench'),
   serverSearch: document.getElementById('server-search'),
 };
 
@@ -88,6 +93,7 @@ let serverSearchQuery = '';
 let toastTimer = null;
 const sftpUi = window.LocalWebSSHSftp;
 const monitorUi = window.LocalWebSSHMonitor;
+let agentUi = null;
 
 const readonlyConnectFields = ['host', 'port', 'username', 'label'];
 
@@ -247,7 +253,17 @@ async function connectToServer(item) {
 }
 
 function focusInventoryView(view) {
-  workspaceMode = view === 'snippets' ? 'snippets' : 'servers';
+  if (view === 'agent') {
+    if (agentUi?.isInWorkbench?.()) {
+      workspaceMode = 'agent-workbench';
+    } else {
+      workspaceMode = 'agent';
+      agentUi?.leaveWorkbench?.();
+    }
+  } else {
+    workspaceMode = view === 'snippets' ? 'snippets' : 'servers';
+    agentUi?.leaveWorkbench?.();
+  }
   document.querySelectorAll('.nav-item[data-view]').forEach((btn) => {
     btn.classList.toggle('active', btn.dataset.view === view);
   });
@@ -461,11 +477,15 @@ function updateWorkspaceVisibility() {
   const isTerminal = workspaceMode === 'terminal' && sessions.size > 0;
   const isServers = workspaceMode === 'servers';
   const isSnippets = workspaceMode === 'snippets';
+  const isAgent = workspaceMode === 'agent';
+  const isAgentWb = workspaceMode === 'agent-workbench';
   const noServers = savedConnections.length === 0;
 
   els.welcome.classList.toggle('hidden', !isServers || !noServers);
   els.serversBrowser.classList.toggle('hidden', !isServers || noServers);
   els.snippetsBrowser.classList.toggle('hidden', !isSnippets);
+  els.agentBrowser?.classList.toggle('hidden', !isAgent);
+  els.agentWorkbench?.classList.toggle('hidden', !isAgentWb);
   els.tabBar.classList.toggle('hidden', !isTerminal);
   els.sessionPanels.classList.toggle('hidden', !isTerminal);
   els.sessionToolbar.classList.toggle('hidden', !isTerminal);
@@ -755,6 +775,7 @@ function setSidebarView(view) {
   focusInventoryView(view);
   if (view === 'servers') renderServersBrowser();
   if (view === 'snippets') renderSnippets();
+  if (view === 'agent') agentUi?.loadSessions?.();
 }
 
 
@@ -951,6 +972,22 @@ async function init() {
   } catch (err) {
     showToast(`初始化失败: ${err.message}`, 'error', 5000);
   }
+  agentUi = window.LocalWebSSHAgent.createAgentModule({
+    api,
+    showToast,
+    uid,
+    onEnterWorkbench: () => {
+      workspaceMode = 'agent-workbench';
+      document.querySelectorAll('.nav-item[data-view]').forEach((btn) => {
+        btn.classList.toggle('active', btn.dataset.view === 'agent');
+      });
+      updateWorkspaceVisibility();
+    },
+    onLeaveWorkbench: () => {
+      if (workspaceMode === 'agent-workbench') workspaceMode = 'agent';
+      updateWorkspaceVisibility();
+    },
+  });
   await loadConnections();
   await loadSnippets();
   focusInventoryView('servers');

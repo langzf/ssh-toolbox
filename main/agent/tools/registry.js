@@ -8,6 +8,10 @@ function createToolRegistry(toolModules = []) {
   for (const mod of toolModules) {
     for (const tool of mod) {
       tools.set(tool.name, tool);
+      const apiName = toApiToolName(tool.name);
+      if (apiName !== tool.name) {
+        tools.set(apiName, tool);
+      }
     }
   }
 
@@ -16,7 +20,14 @@ function createToolRegistry(toolModules = []) {
   }
 
   function listAll() {
-    return [...tools.values()];
+    const seen = new Set();
+    const result = [];
+    for (const tool of tools.values()) {
+      if (seen.has(tool.name)) continue;
+      seen.add(tool.name);
+      result.push(tool);
+    }
+    return result;
   }
 
   function listAvailable() {
@@ -27,7 +38,7 @@ function createToolRegistry(toolModules = []) {
     return listAvailable().map((t) => ({
       type: 'function',
       function: {
-        name: t.name,
+        name: toApiToolName(t.name),
         description: t.description,
         parameters: t.inputSchema,
       },

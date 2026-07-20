@@ -10,10 +10,11 @@ const { createK8sReadTools } = require('./k8s-read');
 const { createK8sWriteTools } = require('./k8s-write');
 const { createSkillTools } = require('./skills');
 
-function createDefaultRegistry() {
+function createDefaultRegistry(opts = {}) {
+  const { skillsRoot } = opts;
   return createToolRegistry([
     metaTools,
-    createSkillTools(),
+    createSkillTools({ skillsRoot }),
     createServerTools(),
     createSshReadTools(),
     createSshWriteTools(),

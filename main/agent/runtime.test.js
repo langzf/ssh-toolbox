@@ -1,6 +1,7 @@
 const { test } = require('node:test');
 const assert = require('node:assert/strict');
 const { runAgentTurn, buildSystemPrompt } = require('./runtime');
+const { createToolRegistry } = require('./tools/registry');
 const { RISK } = require('./types');
 
 function createMemorySessions() {
@@ -50,20 +51,7 @@ function createMockRegistry() {
     inputSchema: { type: 'object', properties: {} },
     execute: async () => ({ ok: true, data: { cpu: { percent: 12 } } }),
   };
-  return {
-    listAvailable: () => [metricsTool],
-    toOpenAiTools: () => [
-      {
-        type: 'function',
-        function: {
-          name: 'metrics.fetch',
-          description: '获取指标',
-          parameters: { type: 'object', properties: {} },
-        },
-      },
-    ],
-    get: (name) => (name === 'metrics.fetch' ? metricsTool : null),
-  };
+  return createToolRegistry([[metricsTool]]);
 }
 
 test('buildSystemPrompt lists tool names', () => {
@@ -101,7 +89,7 @@ test('runAgentTurn: mock LLM tool call then final text', async () => {
                 {
                   id: 'call_1',
                   type: 'function',
-                  function: { name: 'metrics.fetch', arguments: '{}' },
+                  function: { name: 'metrics_fetch', arguments: '{}' },
                 },
               ],
             },
@@ -131,9 +119,9 @@ test('runAgentTurn: mock LLM tool call then final text', async () => {
   assert.equal(msgs[0].role, 'user');
   assert.equal(msgs[0].content, '看看 CPU');
   assert.equal(msgs[1].role, 'assistant');
-  assert.equal(msgs[1].toolCalls?.[0]?.function?.name, 'metrics.fetch');
+  assert.equal(msgs[1].toolCalls?.[0]?.function?.name, 'metrics_fetch');
   assert.equal(msgs[2].role, 'tool');
-  assert.equal(msgs[2].name, 'metrics.fetch');
+  assert.equal(msgs[2].name, 'metrics_fetch');
   assert.match(msgs[2].content, /"percent":12/);
   assert.equal(msgs[3].role, 'assistant');
   assert.match(msgs[3].content, /12%/);
@@ -157,13 +145,7 @@ test('runAgentTurn: write ssh.exec confirms then executes on allow-once', async 
     },
   };
 
-  const registry = {
-    listAvailable: () => [sshTool],
-    toOpenAiTools: () => [
-      { type: 'function', function: { name: 'ssh.exec', description: 'exec', parameters: sshTool.inputSchema } },
-    ],
-    get: (name) => (name === 'ssh.exec' ? sshTool : null),
-  };
+  const registry = createToolRegistry([[sshTool]]);
 
   const chatCompletion = async () => {
     call += 1;
@@ -178,7 +160,10 @@ test('runAgentTurn: write ssh.exec confirms then executes on allow-once', async 
                 {
                   id: 'call_w',
                   type: 'function',
-                  function: { name: 'ssh.exec', arguments: JSON.stringify({ command: 'systemctl restart nginx' }) },
+                  function: {
+                    name: 'ssh_exec',
+                    arguments: JSON.stringify({ command: 'systemctl restart nginx' }),
+                  },
                 },
               ],
             },
@@ -225,13 +210,7 @@ test('runAgentTurn: write ssh.exec denied when user rejects confirm', async () =
     },
   };
 
-  const registry = {
-    listAvailable: () => [sshTool],
-    toOpenAiTools: () => [
-      { type: 'function', function: { name: 'ssh.exec', description: 'exec', parameters: sshTool.inputSchema } },
-    ],
-    get: (name) => (name === 'ssh.exec' ? sshTool : null),
-  };
+  const registry = createToolRegistry([[sshTool]]);
 
   const chatCompletion = async () => {
     call += 1;
@@ -246,7 +225,10 @@ test('runAgentTurn: write ssh.exec denied when user rejects confirm', async () =
                 {
                   id: 'call_w',
                   type: 'function',
-                  function: { name: 'ssh.exec', arguments: JSON.stringify({ command: 'systemctl restart nginx' }) },
+                  function: {
+                    name: 'ssh_exec',
+                    arguments: JSON.stringify({ command: 'systemctl restart nginx' }),
+                  },
                 },
               ],
             },

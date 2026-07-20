@@ -1,3 +1,5 @@
+const path = require('path');
+const { app } = require('electron');
 const { createAgentSettingsModule } = require('./settings');
 const { createAgentSessionsModule } = require('./sessions');
 const { chatCompletion } = require('./llm-client');
@@ -5,6 +7,18 @@ const { runAgentTurn } = require('./runtime');
 const { createDefaultRegistry } = require('./tools');
 const { createConfirmManager } = require('./confirm');
 const { createNoopChannelAdapter } = require('./channel-adapter');
+const { setDefaultSkillsRoot, resolveSkillsRoot } = require('./skills/catalog');
+
+function resolveAppSkillsRoot() {
+  try {
+    if (app && typeof app.getAppPath === 'function') {
+      return path.join(app.getAppPath(), 'skills');
+    }
+  } catch (_) {
+    /* Electron app may not be ready in some test contexts */
+  }
+  return resolveSkillsRoot();
+}
 
 const SIMPLE_SYSTEM_PROMPT =
   '你是 SSH 工具箱助手，帮助用户管理 SSH 连接、远程命令与服务器运维。请用简洁清晰的中文回答。';
@@ -27,7 +41,9 @@ function registerAgentIpc(ipcMain, deps) {
 
   const agentSettings = createAgentSettingsModule({ encryptSecret, decryptSecret });
   const agentSessions = createAgentSessionsModule();
-  const registry = createDefaultRegistry();
+  const skillsRoot = resolveAppSkillsRoot();
+  setDefaultSkillsRoot(skillsRoot);
+  const registry = createDefaultRegistry({ skillsRoot });
   const confirmManager = createConfirmManager(getWebContents);
   /** @type {Map<string, Set<string>>} */
   const sessionAllowSets = new Map();

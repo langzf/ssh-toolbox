@@ -4,9 +4,16 @@ const fs = require('fs');
 const path = require('path');
 
 const cache = new Map();
+/** @type {string | null} */
+let defaultSkillsRoot = null;
+
+function setDefaultSkillsRoot(root) {
+  defaultSkillsRoot = root;
+}
 
 function resolveSkillsRoot(appRoot) {
   if (appRoot) return path.join(appRoot, 'skills');
+  if (defaultSkillsRoot) return defaultSkillsRoot;
   return path.join(__dirname, '..', '..', '..', 'skills');
 }
 
@@ -69,8 +76,14 @@ function clearCatalogCache() {
   cache.clear();
 }
 
+function clearDefaultSkillsRoot() {
+  defaultSkillsRoot = null;
+}
+
 module.exports = {
   resolveSkillsRoot,
+  setDefaultSkillsRoot,
+  clearDefaultSkillsRoot,
   parseFrontmatter,
   loadCatalog,
   getCatalog,

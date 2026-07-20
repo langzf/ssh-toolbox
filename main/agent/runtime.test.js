@@ -67,9 +67,20 @@ function createMockRegistry() {
 }
 
 test('buildSystemPrompt lists tool names', () => {
-  const prompt = buildSystemPrompt([{ name: 'metrics.fetch', description: '指标' }]);
-  assert.match(prompt, /metrics\.fetch/);
+  const prompt = buildSystemPrompt([{ name: 'metrics.fetch', description: '指标' }], []);
+  assert.match(prompt, /metrics_fetch/);
   assert.match(prompt, /禁止臆造/);
+});
+
+test('buildSystemPrompt advertises skills', () => {
+  const prompt = buildSystemPrompt(
+    [{ name: 'metrics.fetch', description: '指标' }],
+    [{ name: 'host-health-check', description: '主机体检。Use when user asks for health check.' }]
+  );
+  assert.match(prompt, /可用 Skills/);
+  assert.match(prompt, /host-health-check/);
+  assert.match(prompt, /agent_load_skill/);
+  assert.match(prompt, /metrics_fetch/);
 });
 
 test('runAgentTurn: mock LLM tool call then final text', async () => {

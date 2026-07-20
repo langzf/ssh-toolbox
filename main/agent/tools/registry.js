@@ -1,3 +1,7 @@
+function toApiToolName(name) {
+  return String(name).replace(/\./g, '_');
+}
+
 function createToolRegistry(toolModules = []) {
   const tools = new Map();
 
@@ -33,4 +37,4 @@ function createToolRegistry(toolModules = []) {
   return { get, listAll, listAvailable, toOpenAiTools };
 }
 
-module.exports = { createToolRegistry };
+module.exports = { createToolRegistry, toApiToolName };

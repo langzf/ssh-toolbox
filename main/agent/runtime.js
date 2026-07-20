@@ -23,20 +23,34 @@ function normalizeToolCalls(toolCalls) {
   }));
 }
 
-function buildSystemPrompt(tools) {
-  const names = tools.map((t) => `- ${t.name}: ${t.description}`).join('\n');
-  return [
+function buildSystemPrompt(tools, skills) {
+  const { toApiToolName } = require('./tools/registry');
+  const { getCatalog } = require('./skills/catalog');
+  const skillList = Array.isArray(skills) ? skills : getCatalog();
+  const names = tools
+    .map((t) => `- ${toApiToolName(t.name)}: ${t.description}`)
+    .join('\n');
+  const parts = [
     '你是 SSH 工具箱助手，帮助用户管理 SSH 连接、远程命令与服务器运维。',
     '请用简洁清晰的中文回答。',
     '',
     '规则：',
     '1. 只能使用下列已注册且可用的工具，禁止臆造执行结果。',
-    '2. 未绑定服务器时，先请用户选择目标或调用 server.list / agent.ask_user。',
+    '2. 未绑定服务器时，先请用户选择目标或调用 server_list / agent_ask_user。',
     '3. 只读命令可直接执行；写/高危命令需用户确认后执行。',
+    '4. 若用户任务匹配某个 Skill 的说明，先调用 agent_load_skill 加载完整步骤，再按步骤执行。',
     '',
     '可用工具：',
     names,
-  ].join('\n');
+  ];
+  if (skillList.length) {
+    parts.push(
+      '',
+      '可用 Skills（任务匹配时先调用 agent_load_skill 加载完整说明，再执行）：',
+      ...skillList.map((s) => `- ${s.name}: ${s.description}`)
+    );
+  }
+  return parts.join('\n');
 }
 
 function messagesForLlm(session) {

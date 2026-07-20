@@ -1,6 +1,6 @@
 ---
 name: k8s-pod-troubleshoot
-description: 排查 Kubernetes Pod 异常：状态、事件、日志与资源指标。在用户提到 Pod 起不来、CrashLoop、Pending、Pod 异常、k8s troubleshoot 时使用。
+description: 排查 Kubernetes Pod 异常：状态、日志与资源指标。在用户提到 Pod 起不来、CrashLoop、Pending、Pod 异常、k8s troubleshoot 时使用。
 ---
 
 # K8s Pod 排查

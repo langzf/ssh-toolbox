@@ -11,7 +11,7 @@ description: 安全重启 systemd 服务：重启前检查 → 用户确认 → 
 
 ## 步骤
 
-1. 若未绑定 SSH 目标：`server_list` 或 `agent_ask_user`；确认要重启的服务名。
+1. 若已绑定 SSH 目标：直接在该主机操作，禁止 `server_list` / 让用户从全部服务器再选；服务名不明确时用 `agent_ask_user` 只追问服务名。若未绑定：`server_list` 或 `agent_ask_user`。
 2. **重启前只读检查**（同 service-status-check）：`systemctl status`、`ss -tlnp`、近期 `journalctl`。
 3. **提出重启命令**（如 `systemctl restart <service>`），说明影响范围，**等待用户确认**后再调用 `ssh_exec`（写操作会触发确认流程）。
 4. 用户拒绝确认则**不执行**，告知已取消。

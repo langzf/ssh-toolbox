@@ -23,26 +23,89 @@ function normalizeToolCalls(toolCalls) {
   }));
 }
 
-function buildSystemPrompt(tools, skills) {
+function hasSshTarget(targets) {
+  return (targets || []).some((t) => t.type === 'ssh' && t.serverId);
+}
+
+function hasK8sTarget(targets) {
+  return (targets || []).some((t) => t.type === 'k8s' && t.clusterId);
+}
+
+/** When SSH is already bound, hide list/connect so the model cannot scan all hosts. */
+function filterToolsForTargets(tools, targets) {
+  const list = Array.isArray(tools) ? tools : [];
+  if (!hasSshTarget(targets)) return list;
+  return list.filter((t) => t.name !== 'server.list' && t.name !== 'server.connect');
+}
+
+function formatBoundTargets(targets, connections = []) {
+  const lines = [];
+  const ssh = (targets || []).find((t) => t.type === 'ssh' && t.serverId);
+  if (ssh) {
+    const conn = (connections || []).find((c) => c.id === ssh.serverId);
+    const label = conn?.label || conn?.host || ssh.serverId;
+    const host = conn?.host ? ` (${conn.host})` : '';
+    lines.push(
+      `- SSH 已绑定：「${label}」${host}，serverId=${ssh.serverId}`
+    );
+    lines.push('  请直接对该主机执行工具；禁止列出全部服务器，禁止让用户从服务器清单中再选一台。');
+    lines.push('  若仅缺少服务名、路径、命名空间等细节，可用 agent_ask_user 只追问该细节。');
+  }
+  const k8s = (targets || []).find((t) => t.type === 'k8s' && t.clusterId);
+  if (k8s) {
+    const ns = k8s.namespace ? `，namespace=${k8s.namespace}` : '';
+    lines.push(`- K8s 已绑定：clusterId=${k8s.clusterId}${ns}`);
+    lines.push('  请直接对该集群执行工具；不要再让用户选择集群。');
+  }
+  return lines;
+}
+
+function toolsToOpenAi(tools) {
+  const { toApiToolName } = require('./tools/registry');
+  return (tools || []).map((t) => ({
+    type: 'function',
+    function: {
+      name: toApiToolName(t.name),
+      description: t.description,
+      parameters: t.inputSchema,
+    },
+  }));
+}
+
+function buildSystemPrompt(tools, skills, binding) {
   const { toApiToolName } = require('./tools/registry');
   const { getCatalog } = require('./skills/catalog');
   const skillList = Array.isArray(skills) ? skills : getCatalog();
+  const targets = binding?.targets;
+  const connections = binding?.connections || [];
+  const boundLines = formatBoundTargets(targets, connections);
+  const sshBound = hasSshTarget(targets);
+  const k8sBound = hasK8sTarget(targets);
   const names = tools
     .map((t) => `- ${toApiToolName(t.name)}: ${t.description}`)
     .join('\n');
+
+  const targetRule = sshBound || k8sBound
+    ? '2. 当前会话已绑定目标（见下方「当前绑定」）：优先直接对绑定目标操作；不要调用 server_list / server_connect，不要罗列全部服务器让用户再选。'
+    : '2. 未绑定服务器/集群时，先请用户选择目标或调用 server_list / agent_ask_user。';
+
   const parts = [
     '你是 SSH 工具箱助手，帮助用户管理 SSH 连接、远程命令与服务器运维。',
     '请用简洁清晰的中文回答。',
     '',
     '规则：',
     '1. 只能使用下列已注册且可用的工具，禁止臆造执行结果。',
-    '2. 未绑定服务器时，先请用户选择目标或调用 server_list / agent_ask_user。',
+    targetRule,
     '3. 只读命令可直接执行；写/高危命令需用户确认后执行。',
     '4. 若用户任务匹配某个 Skill 的说明，先调用 agent_load_skill 加载完整步骤，再按步骤执行。',
-    '',
-    '可用工具：',
-    names,
   ];
+
+  if (boundLines.length) {
+    parts.push('', '当前绑定：', ...boundLines);
+  }
+
+  parts.push('', '可用工具：', names);
+
   if (skillList.length) {
     parts.push(
       '',
@@ -167,8 +230,14 @@ async function runAgentTurn(deps, { agentSessionId, userText }) {
 
   let current = afterUser;
   const maxSteps = settings.maxSteps || 12;
-  const tools = registry.listAvailable();
-  const systemPrompt = buildSystemPrompt(tools);
+  const turnCtx = typeof buildContext === 'function' ? buildContext(current) : {};
+  const connections = turnCtx.getConnections?.() || [];
+  const tools = filterToolsForTargets(registry.listAvailable(), current.targets);
+  const systemPrompt = buildSystemPrompt(tools, undefined, {
+    targets: current.targets,
+    connections,
+  });
+  const openAiTools = toolsToOpenAi(tools);
 
   for (let step = 0; step < maxSteps; step += 1) {
     const llmMessages = [
@@ -182,7 +251,7 @@ async function runAgentTurn(deps, { agentSessionId, userText }) {
       apiKey,
       model: settings.model,
       messages: llmMessages,
-      tools: registry.toOpenAiTools(),
+      tools: openAiTools,
       timeoutMs: settings.timeoutMs,
       onDelta: (d) => {
         if (d?.type === 'content' && d.text) {
@@ -280,6 +349,9 @@ async function runAgentTurn(deps, { agentSessionId, userText }) {
 module.exports = {
   runAgentTurn,
   buildSystemPrompt,
+  filterToolsForTargets,
+  formatBoundTargets,
+  toolsToOpenAi,
   normalizeToolCalls,
   normalizePayload,
   messagesForLlm,

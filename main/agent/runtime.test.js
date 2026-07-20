@@ -71,6 +71,39 @@ test('buildSystemPrompt advertises skills', () => {
   assert.match(prompt, /metrics_fetch/);
 });
 
+test('buildSystemPrompt includes bound SSH target and forbids listing all servers', () => {
+  const prompt = buildSystemPrompt(
+    [{ name: 'ssh.exec', description: '执行命令' }],
+    [],
+    {
+      targets: [{ type: 'ssh', serverId: 'srv-helios' }],
+      connections: [{ id: 'srv-helios', label: 'Helios', host: '10.0.0.1' }],
+    }
+  );
+  assert.match(prompt, /当前绑定/);
+  assert.match(prompt, /Helios/);
+  assert.match(prompt, /srv-helios/);
+  assert.match(prompt, /禁止列出全部服务器|不要调用 server_list/);
+  assert.doesNotMatch(prompt, /未绑定服务器\/集群时/);
+});
+
+test('filterToolsForTargets hides server.list and server.connect when SSH bound', () => {
+  const { filterToolsForTargets } = require('./runtime');
+  const tools = [
+    { name: 'server.list' },
+    { name: 'server.connect' },
+    { name: 'ssh.exec' },
+    { name: 'metrics.fetch' },
+  ];
+  const filtered = filterToolsForTargets(tools, [{ type: 'ssh', serverId: 's1' }]);
+  assert.deepEqual(
+    filtered.map((t) => t.name),
+    ['ssh.exec', 'metrics.fetch']
+  );
+  const unbound = filterToolsForTargets(tools, []);
+  assert.equal(unbound.length, 4);
+});
+
 test('runAgentTurn: mock LLM tool call then final text', async () => {
   const agentSessions = createMemorySessions();
   const session = agentSessions.createSession();

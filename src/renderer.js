@@ -966,8 +966,28 @@ document.getElementById('settings-form').addEventListener('submit', async (e) =>
 
 document.getElementById('btn-agent-test').addEventListener('click', async () => {
   const btn = document.getElementById('btn-agent-test');
+  const form = document.getElementById('settings-form');
   btn.disabled = true;
   try {
+    // 测试前先把当前表单写入存储（否则只读到上次「保存」的 Key）
+    const fd = new FormData(form);
+    const agentPayload = {
+      baseUrl: String(fd.get('agentBaseUrl') || '').trim(),
+      model: String(fd.get('agentModel') || '').trim(),
+      policyMode: fd.get('agentPolicyMode') || 'standard',
+      maxSteps: Number(fd.get('agentMaxSteps')) || 12,
+      timeoutMs: Number(fd.get('agentTimeoutMs')) || 60000,
+    };
+    const apiKey = String(fd.get('agentApiKey') || '').trim();
+    if (apiKey) agentPayload.apiKey = apiKey;
+    const saved = await api.agentSaveSettings(agentPayload);
+    if (!saved?.hasApiKey) {
+      throw new Error('请先填写 Agent API Key，然后再测试连接');
+    }
+    if (apiKey) {
+      form.agentApiKey.value = '';
+      form.agentApiKey.placeholder = '已保存 Key（留空则不修改）';
+    }
     const reply = await api.agentChat({ messages: [{ role: 'user', content: '回复：pong' }] });
     const text = reply?.content || JSON.stringify(reply);
     showToast(`Agent 回复: ${text.slice(0, 120)}`, 'success', 6000);

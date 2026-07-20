@@ -2,7 +2,7 @@ const path = require('path');
 const { app } = require('electron');
 const { createAgentSettingsModule } = require('./settings');
 const { createAgentSessionsModule } = require('./sessions');
-const { chatCompletion } = require('./llm-client');
+const { chatCompletion, chatCompletionStream } = require('./llm-client');
 const { runAgentTurn } = require('./runtime');
 const { createDefaultRegistry } = require('./tools');
 const { createConfirmManager } = require('./confirm');
@@ -135,21 +135,36 @@ function registerAgentIpc(ipcMain, deps) {
     const apiKey = agentSettings.getApiKey();
     const sessionAllowSet = getSessionAllowSet(agentSessionId);
     const requestConfirm = confirmManager.createRequestConfirm(agentSessionId);
-    const result = await runAgentTurn(
-      {
-        registry,
-        agentSessions,
-        chatCompletion,
-        settings,
-        apiKey,
-        requestConfirm,
-        channelAdapter,
-        sessionAllowSet,
-        buildContext: (agentSession) => buildContext(agentSession),
-      },
-      { agentSessionId, userText: String(userText || '').trim() }
-    );
-    return result;
+    const wc = getWebContents?.();
+    const onEvent = (payload) => {
+      if (wc && !wc.isDestroyed()) wc.send('agent-turn-event', payload);
+    };
+    try {
+      const result = await runAgentTurn(
+        {
+          registry,
+          agentSessions,
+          chatCompletion,
+          chatCompletionStream,
+          settings,
+          apiKey,
+          requestConfirm,
+          channelAdapter,
+          sessionAllowSet,
+          onEvent,
+          buildContext: (agentSession) => buildContext(agentSession),
+        },
+        { agentSessionId, userText: String(userText || '').trim() }
+      );
+      return result;
+    } catch (err) {
+      onEvent({
+        agentSessionId,
+        type: 'error',
+        error: err.message || String(err),
+      });
+      throw err;
+    }
   });
 }
 

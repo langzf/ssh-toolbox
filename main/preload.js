@@ -93,4 +93,9 @@ contextBridge.exposeInMainWorld('localWebSSH', {
     ipcRenderer.on('agent-confirm-request', listener);
     return () => ipcRenderer.removeListener('agent-confirm-request', listener);
   },
+  onAgentTurnEvent: (handler) => {
+    const listener = (_event, payload) => handler(payload);
+    ipcRenderer.on('agent-turn-event', listener);
+    return () => ipcRenderer.removeListener('agent-turn-event', listener);
+  },
 });

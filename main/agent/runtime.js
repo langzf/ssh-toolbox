@@ -123,11 +123,25 @@ async function handleToolPolicy(tool, args, requestConfirm, { policyMode, sessio
   return { action: 'reject', error: denyMsg, riskLevel: risk };
 }
 
+async function callLlm(deps, opts) {
+  if (typeof deps.chatCompletionStream === 'function') {
+    return deps.chatCompletionStream(opts);
+  }
+  const result = await deps.chatCompletion(opts);
+  const content = result.choices?.[0]?.message?.content;
+  if (content && opts.onDelta) opts.onDelta({ type: 'content', text: content });
+  return result;
+}
+
+function lastMessage(session) {
+  const msgs = session?.messages || [];
+  return msgs[msgs.length - 1] || null;
+}
+
 async function runAgentTurn(deps, { agentSessionId, userText }) {
   const {
     registry,
     agentSessions,
-    chatCompletion,
     settings,
     apiKey,
     requestConfirm,
@@ -137,11 +151,21 @@ async function runAgentTurn(deps, { agentSessionId, userText }) {
   } = deps;
   void channelAdapter;
 
+  const emit = (payload) => {
+    try {
+      deps.onEvent?.({ agentSessionId, ...payload });
+    } catch (_) {
+      /* ignore UI event errors */
+    }
+  };
+
   const session = agentSessions.getSession(agentSessionId);
   if (!session) throw new Error('会话不存在');
 
-  agentSessions.appendMessage(agentSessionId, { role: 'user', content: userText });
-  let current = agentSessions.getSession(agentSessionId);
+  const afterUser = agentSessions.appendMessage(agentSessionId, { role: 'user', content: userText });
+  emit({ type: 'user', message: lastMessage(afterUser) });
+
+  let current = afterUser;
   const maxSteps = settings.maxSteps || 12;
   const tools = registry.listAvailable();
   const systemPrompt = buildSystemPrompt(tools);
@@ -152,13 +176,19 @@ async function runAgentTurn(deps, { agentSessionId, userText }) {
       ...messagesForLlm(current),
     ];
 
-    const result = await chatCompletion({
+    emit({ type: 'assistant_start' });
+    const result = await callLlm(deps, {
       baseUrl: settings.baseUrl,
       apiKey,
       model: settings.model,
       messages: llmMessages,
       tools: registry.toOpenAiTools(),
       timeoutMs: settings.timeoutMs,
+      onDelta: (d) => {
+        if (d?.type === 'content' && d.text) {
+          emit({ type: 'assistant_delta', text: d.text });
+        }
+      },
     });
 
     const message = result.choices?.[0]?.message;
@@ -166,11 +196,12 @@ async function runAgentTurn(deps, { agentSessionId, userText }) {
 
     if (message.tool_calls?.length) {
       const toolCalls = normalizeToolCalls(message.tool_calls);
-      agentSessions.appendMessage(agentSessionId, {
+      const afterAssistant = agentSessions.appendMessage(agentSessionId, {
         role: 'assistant',
         content: message.content || '',
         toolCalls,
       });
+      emit({ type: 'message', message: lastMessage(afterAssistant) });
 
       for (const tc of message.tool_calls) {
         const toolName = tc.function?.name;
@@ -187,13 +218,14 @@ async function runAgentTurn(deps, { agentSessionId, userText }) {
             ok: false,
             error: `未知或不可用工具: ${toolName}`,
           });
-          agentSessions.appendMessage(agentSessionId, {
+          const afterTool = agentSessions.appendMessage(agentSessionId, {
             role: 'tool',
             toolCallId: tc.id,
             name: toolName,
             content,
             truncated,
           });
+          emit({ type: 'message', message: lastMessage(afterTool) });
           continue;
         }
 
@@ -213,32 +245,36 @@ async function runAgentTurn(deps, { agentSessionId, userText }) {
         }
 
         const { content, truncated } = formatToolResult(execResult);
-        agentSessions.appendMessage(agentSessionId, {
+        const afterTool = agentSessions.appendMessage(agentSessionId, {
           role: 'tool',
           toolCallId: tc.id,
           name: toolName,
           content,
           truncated,
         });
+        emit({ type: 'message', message: lastMessage(afterTool) });
       }
 
       current = agentSessions.getSession(agentSessionId);
       continue;
     }
 
-    agentSessions.appendMessage(agentSessionId, {
+    const afterFinal = agentSessions.appendMessage(agentSessionId, {
       role: 'assistant',
       content: message.content || '',
     });
-    current = agentSessions.getSession(agentSessionId);
-    return { session: current };
+    emit({ type: 'message', message: lastMessage(afterFinal) });
+    emit({ type: 'done' });
+    return { session: afterFinal };
   }
 
-  agentSessions.appendMessage(agentSessionId, {
+  const afterMax = agentSessions.appendMessage(agentSessionId, {
     role: 'assistant',
     content: '已达到最大推理步数，请简化问题后重试。',
   });
-  return { session: agentSessions.getSession(agentSessionId) };
+  emit({ type: 'message', message: lastMessage(afterMax) });
+  emit({ type: 'done' });
+  return { session: afterMax };
 }
 
 module.exports = {

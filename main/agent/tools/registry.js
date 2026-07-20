@@ -1,5 +1,6 @@
+/** OpenAI-compatible APIs require tool names matching ^[a-zA-Z0-9_-]+$ (no dots). */
 function toApiToolName(name) {
-  return String(name).replace(/\./g, '_');
+  return String(name || '').replace(/\./g, '_');
 }
 
 function createToolRegistry(toolModules = []) {
@@ -16,7 +17,8 @@ function createToolRegistry(toolModules = []) {
   }
 
   function get(name) {
-    return tools.get(name) || null;
+    if (!name) return null;
+    return tools.get(name) || tools.get(toApiToolName(name)) || null;
   }
 
   function listAll() {
@@ -45,7 +47,7 @@ function createToolRegistry(toolModules = []) {
     }));
   }
 
-  return { get, listAll, listAvailable, toOpenAiTools };
+  return { get, listAll, listAvailable, toOpenAiTools, toApiToolName };
 }
 
 module.exports = { createToolRegistry, toApiToolName };

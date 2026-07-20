@@ -108,23 +108,27 @@
 
         <section id="agent-workbench" class="agent-workbench hidden" aria-label="Agent 工作台">
           <header class="agent-wb-header">
-            <button type="button" id="agent-wb-back" class="btn-secondary agent-back-btn">← 对话列表</button>
-            <h2 id="agent-wb-title" class="agent-wb-title">新对话</h2>
-            <div id="agent-target-bar" class="agent-target-bar">
-              <label for="agent-target-type" class="agent-target-label">目标</label>
-              <select id="agent-target-type" class="agent-target-select" title="目标类型">
-                <option value="ssh">SSH</option>
-                <option value="k8s">K8s</option>
-              </select>
-              <select id="agent-target-select" class="agent-target-select" title="绑定已保存服务器">
-                <option value="">未绑定</option>
-              </select>
-              <select id="agent-k8s-cluster-select" class="agent-target-select hidden" title="绑定 K8s 集群">
-                <option value="">未绑定</option>
-              </select>
-              <input id="agent-k8s-namespace" class="agent-target-ns hidden" type="text" placeholder="命名空间(可选)" autocomplete="off" />
+            <div class="agent-wb-header-left">
+              <button type="button" id="agent-wb-back" class="btn-secondary agent-back-btn">← 对话列表</button>
+              <h2 id="agent-wb-title" class="agent-wb-title">新对话</h2>
             </div>
-            <button type="button" id="agent-delete-session" class="btn-text agent-delete-btn" title="删除此对话">删除</button>
+            <div class="agent-wb-header-right">
+              <div id="agent-target-bar" class="agent-target-bar">
+                <span class="agent-target-label">目标</span>
+                <select id="agent-target-type" class="agent-target-select" title="目标类型">
+                  <option value="ssh">SSH</option>
+                  <option value="k8s">K8s</option>
+                </select>
+                <select id="agent-target-select" class="agent-target-select" title="绑定已保存服务器">
+                  <option value="">未绑定</option>
+                </select>
+                <select id="agent-k8s-cluster-select" class="agent-target-select hidden" title="绑定 K8s 集群">
+                  <option value="">未绑定</option>
+                </select>
+                <input id="agent-k8s-namespace" class="agent-target-ns hidden" type="text" placeholder="命名空间(可选)" autocomplete="off" />
+              </div>
+              <button type="button" id="agent-delete-session" class="btn-ghost-danger" title="删除此对话">删除</button>
+            </div>
           </header>
           <div id="agent-messages" class="agent-messages" role="log" aria-live="polite"></div>
           <div id="agent-confirm-bar" class="agent-confirm-bar hidden" role="alertdialog" aria-labelledby="agent-confirm-title"></div>

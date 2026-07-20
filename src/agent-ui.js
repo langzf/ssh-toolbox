@@ -23,55 +23,344 @@ function riskLabel(level) {
 }
 
 const TOOL_LABELS = {
+  agent_ask_user: '向你确认信息',
+  'agent.ask_user': '向你确认信息',
   agent_load_skill: '加载技能',
   'agent.load_skill': '加载技能',
   agent_read_skill_resource: '读取技能资料',
   'agent.read_skill_resource': '读取技能资料',
+  server_list: '查看服务器列表',
+  'server.list': '查看服务器列表',
+  server_connect: '连接服务器',
+  'server.connect': '连接服务器',
+  ssh_exec: '执行远程命令',
+  'ssh.exec': '执行远程命令',
+  ssh_tail_log: '读取日志',
+  'ssh.tail_log': '读取日志',
+  metrics_fetch: '采集主机指标',
+  'metrics.fetch': '采集主机指标',
+  sftp_list: '浏览远程目录',
+  'sftp.list': '浏览远程目录',
+  sftp_read: '读取远程文件',
+  'sftp.read': '读取远程文件',
+  sftp_write: '写入远程文件',
+  'sftp.write': '写入远程文件',
+  sftp_upload: '上传文件',
+  'sftp.upload': '上传文件',
+  sftp_delete: '删除远程文件',
+  'sftp.delete': '删除远程文件',
+  k8s_list_clusters: '列出 K8s 集群',
+  'k8s.list_clusters': '列出 K8s 集群',
+  k8s_list_namespaces: '列出命名空间',
+  'k8s.list_namespaces': '列出命名空间',
+  k8s_list_pods: '列出 Pod',
+  'k8s.list_pods': '列出 Pod',
+  k8s_pod_logs: '读取 Pod 日志',
+  'k8s.pod_logs': '读取 Pod 日志',
+  k8s_metrics: '采集 K8s 指标',
+  'k8s.metrics': '采集 K8s 指标',
+  k8s_pod_exec: '在 Pod 中执行命令',
+  'k8s.pod_exec': '在 Pod 中执行命令',
+  k8s_delete_pod: '删除 Pod',
+  'k8s.delete_pod': '删除 Pod',
 };
+
+function toolDisplayName(name) {
+  if (!name) return '操作';
+  return TOOL_LABELS[name] || name.replace(/[._]/g, ' ');
+}
+
+function parseToolArgs(raw) {
+  if (!raw) return {};
+  if (typeof raw === 'object') return raw;
+  try {
+    return JSON.parse(raw);
+  } catch (_) {
+    return {};
+  }
+}
+
+function summarizeToolCall(name, args) {
+  const a = parseToolArgs(args);
+  const label = toolDisplayName(name);
+  if (name.includes('connect') && a.serverId) return `${label}`;
+  if (name.includes('exec') && a.command) {
+    const cmd = String(a.command).trim();
+    const short = cmd.length > 48 ? `${cmd.slice(0, 48)}…` : cmd;
+    return `${label} · ${short}`;
+  }
+  if (name.includes('tail_log') && a.path) return `${label} · ${a.path}`;
+  if ((name.includes('sftp') || name.includes('list') || name.includes('read')) && a.remotePath) {
+    return `${label} · ${a.remotePath}`;
+  }
+  if (name.includes('pod') && a.podName) {
+    const ns = a.namespace ? `${a.namespace}/` : '';
+    return `${label} · ${ns}${a.podName}`;
+  }
+  if (name.includes('load_skill') && a.name) return `${label} · ${a.name}`;
+  if (a.namespace) return `${label} · ${a.namespace}`;
+  return label;
+}
+
+function summarizeToolResult(name, content) {
+  let parsed = null;
+  try {
+    parsed = typeof content === 'string' ? JSON.parse(content) : content;
+  } catch (_) {
+    const text = String(content || '').trim();
+    if (!text) return { ok: true, title: `${toolDisplayName(name)}完成`, detail: '' };
+    return {
+      ok: true,
+      title: `${toolDisplayName(name)}完成`,
+      detail: text.length > 120 ? `${text.slice(0, 120)}…` : text,
+    };
+  }
+
+  const ok = parsed?.ok !== false;
+  const err = parsed?.error || '';
+  const data = parsed?.data;
+
+  if (!ok) {
+    return {
+      ok: false,
+      title: `${toolDisplayName(name)}失败`,
+      detail: err || '未知错误',
+    };
+  }
+
+  if (name.includes('connect')) {
+    return { ok: true, title: '已连接服务器', detail: data?.sshSessionId ? 'SSH 会话已就绪' : '' };
+  }
+  if (name.includes('list_clusters') && data?.clusters) {
+    return { ok: true, title: `找到 ${data.clusters.length} 个集群`, detail: '' };
+  }
+  if (name.includes('list_namespaces') && Array.isArray(data)) {
+    return { ok: true, title: `找到 ${data.length} 个命名空间`, detail: '' };
+  }
+  if (name.includes('list_pods') && Array.isArray(data)) {
+    return { ok: true, title: `找到 ${data.length} 个 Pod`, detail: '' };
+  }
+  if (name.includes('server_list') || name.includes('server.list')) {
+    const n = Array.isArray(data) ? data.length : data?.servers?.length;
+    if (n != null) return { ok: true, title: `找到 ${n} 台服务器`, detail: '' };
+  }
+  if (name.includes('metrics')) {
+    return { ok: true, title: '指标已采集', detail: '' };
+  }
+  if (name.includes('load_skill')) {
+    return { ok: true, title: `已加载技能 ${data?.name || ''}`.trim(), detail: '' };
+  }
+  if (name.includes('exec') && data?.stdout != null) {
+    const out = String(data.stdout || data.output || '').trim();
+    return {
+      ok: true,
+      title: '命令已执行',
+      detail: out ? (out.length > 100 ? `${out.slice(0, 100)}…` : out) : `退出码 ${data.exitCode ?? 0}`,
+    };
+  }
+  if (name.includes('logs') || name.includes('tail_log')) {
+    const text = typeof data === 'string' ? data : data?.text || data?.logs || '';
+    const lines = String(text).split('\n').filter(Boolean).length;
+    return { ok: true, title: '日志已读取', detail: lines ? `${lines} 行` : '' };
+  }
+
+  return { ok: true, title: `${toolDisplayName(name)}完成`, detail: '' };
+}
 
 function renderToolCards(toolCalls) {
   if (!toolCalls?.length) return '';
-  const cards = toolCalls
+  const rows = toolCalls
     .map((tc) => {
       const name = tc.function?.name || 'unknown';
-      const label = TOOL_LABELS[name] || name;
       const args = tc.function?.arguments || '{}';
-      return `<details class="agent-tool-card"><summary>🔧 ${escapeHtml(label)}</summary><pre>${escapeHtml(args)}</pre></details>`;
+      const summary = summarizeToolCall(name, args);
+      const raw = (() => {
+        try {
+          return JSON.stringify(parseToolArgs(args), null, 2);
+        } catch (_) {
+          return String(args);
+        }
+      })();
+      return `
+        <details class="agent-step">
+          <summary class="agent-step-summary">
+            <span class="agent-step-dot"></span>
+            <span class="agent-step-text">${escapeHtml(summary)}</span>
+            <span class="agent-step-chevron">详情</span>
+          </summary>
+          <pre class="agent-step-raw">${escapeHtml(raw)}</pre>
+        </details>`;
     })
     .join('');
-  return `<div class="agent-tool-cards">${cards}</div>`;
+  return `<div class="agent-steps">${rows}</div>`;
+}
+
+function renderToolResultBlock(msg) {
+  const summary = summarizeToolResult(msg.name, msg.content);
+  const statusClass = summary.ok ? 'is-ok' : 'is-fail';
+  let raw = String(msg.content || '');
+  try {
+    raw = JSON.stringify(JSON.parse(msg.content), null, 2);
+  } catch (_) {
+    /* keep */
+  }
+  return `
+    <div class="agent-step-result ${statusClass}">
+      <div class="agent-step-result-main">
+        <span class="agent-step-result-mark">${summary.ok ? '✓' : '!'}</span>
+        <div class="agent-step-result-copy">
+          <div class="agent-step-result-title">${escapeHtml(summary.title)}</div>
+          ${summary.detail ? `<div class="agent-step-result-detail">${escapeHtml(summary.detail)}</div>` : ''}
+        </div>
+      </div>
+      <details class="agent-step-result-more">
+        <summary>原始结果</summary>
+        <pre>${escapeHtml(raw)}</pre>
+      </details>
+    </div>`;
 }
 
 function renderMessageBubble(msg) {
   const div = document.createElement('div');
   div.className = `agent-msg agent-msg-${msg.role}`;
-  const roleLabel =
-    msg.role === 'user'
-      ? '你'
-      : msg.role === 'assistant'
-        ? '助手'
-        : msg.role === 'system'
-          ? '系统'
-          : msg.role === 'tool'
-            ? `工具 · ${msg.name || ''}`
-            : '工具';
+  if (msg.id) div.dataset.msgId = msg.id;
+
+  if (msg.role === 'tool') {
+    div.classList.add('agent-msg-tool-wrap');
+    div.innerHTML = renderToolResultBlock(msg);
+    return div;
+  }
+
+  const roleLabel = msg.role === 'user' ? '你' : msg.role === 'assistant' ? '助手' : '系统';
   const truncatedNote = msg.truncated ? ' <span class="agent-truncated">(已截断)</span>' : '';
   const toolCards = msg.role === 'assistant' ? renderToolCards(msg.toolCalls) : '';
-  let body = escapeHtml(msg.content || '');
-  if (msg.role === 'tool' && msg.content) {
-    try {
-      const parsed = JSON.parse(msg.content);
-      body = escapeHtml(JSON.stringify(parsed, null, 2));
-    } catch (_) {
-      /* keep raw */
-    }
-  }
+  const body = escapeHtml(msg.content || '');
+  const hideEmptyBody = msg.role === 'assistant' && !msg.content && msg.toolCalls?.length;
+
   div.innerHTML = `
     <div class="agent-msg-role">${escapeHtml(roleLabel)}${truncatedNote}</div>
-    <div class="agent-msg-body">${body}</div>
+    ${hideEmptyBody ? '' : `<div class="agent-msg-body">${body}</div>`}
     ${toolCards}
   `;
   return div;
+}
+
+/** Live chat turn: instant user bubble + streaming assistant. */
+function createLiveTurnUi(getMessagesEl) {
+  let streamEl = null;
+  let bodyEl = null;
+  let shownUserIds = new Set();
+  let optimisticUser = false;
+
+  function scroll() {
+    const el = getMessagesEl();
+    if (el) el.scrollTop = el.scrollHeight;
+  }
+
+  function appendUserOptimistic(text) {
+    const el = getMessagesEl();
+    if (!el) return;
+    const bubble = renderMessageBubble({ role: 'user', content: text });
+    bubble.dataset.optimistic = '1';
+    el.appendChild(bubble);
+    optimisticUser = true;
+    scroll();
+  }
+
+  function onUserMessage(msg) {
+    const el = getMessagesEl();
+    if (!el || !msg) return;
+    if (msg.id) shownUserIds.add(msg.id);
+    if (optimisticUser) {
+      const opt = el.querySelector('.agent-msg-user[data-optimistic="1"]');
+      if (opt) {
+        opt.dataset.optimistic = '0';
+        if (msg.id) opt.dataset.msgId = msg.id;
+      }
+      optimisticUser = false;
+      return;
+    }
+    el.appendChild(renderMessageBubble(msg));
+    scroll();
+  }
+
+  function startAssistant() {
+    const el = getMessagesEl();
+    if (!el) return;
+    if (streamEl) return;
+    streamEl = renderMessageBubble({ role: 'assistant', content: '' });
+    streamEl.classList.add('agent-msg-streaming');
+    bodyEl = streamEl.querySelector('.agent-msg-body');
+    if (bodyEl) bodyEl.textContent = '';
+    el.appendChild(streamEl);
+    scroll();
+  }
+
+  function appendDelta(text) {
+    if (!text) return;
+    if (!streamEl) startAssistant();
+    if (bodyEl) bodyEl.textContent += text;
+    scroll();
+  }
+
+  function clearStream() {
+    if (streamEl) {
+      streamEl.classList.remove('agent-msg-streaming');
+      streamEl.remove();
+    }
+    streamEl = null;
+    bodyEl = null;
+  }
+
+  function onPersistedMessage(msg) {
+    const el = getMessagesEl();
+    if (!el || !msg) return;
+
+    if (msg.role === 'user') {
+      onUserMessage(msg);
+      return;
+    }
+
+    if (msg.role === 'assistant') {
+      clearStream();
+      el.appendChild(renderMessageBubble(msg));
+      scroll();
+      return;
+    }
+
+    // tool / system
+    if (streamEl && !bodyEl?.textContent) clearStream();
+    else if (streamEl) {
+      streamEl.classList.remove('agent-msg-streaming');
+      streamEl = null;
+      bodyEl = null;
+    }
+    el.appendChild(renderMessageBubble(msg));
+    scroll();
+  }
+
+  function onDone() {
+    if (streamEl) {
+      streamEl.classList.remove('agent-msg-streaming');
+      streamEl = null;
+      bodyEl = null;
+    }
+    optimisticUser = false;
+  }
+
+  function reset() {
+    clearStream();
+    optimisticUser = false;
+  }
+
+  return {
+    appendUserOptimistic,
+    startAssistant,
+    appendDelta,
+    onPersistedMessage,
+    onDone,
+    reset,
+  };
 }
 
 function createConfirmController({ confirmEl, api, showToast, getActiveSessionId }) {
@@ -207,6 +496,7 @@ function createSessionAgentPanel(sshSessionId, getServerId, deps) {
   let agentSessionId = null;
   let sending = false;
   let paneActive = false;
+  const live = createLiveTurnUi(() => messagesEl);
 
   const confirm = createConfirmController({
     confirmEl,
@@ -217,6 +507,19 @@ function createSessionAgentPanel(sshSessionId, getServerId, deps) {
 
   const unsubConfirm = confirmBus.subscribe((req) => {
     if (paneActive) confirm.onConfirmRequest(req);
+  });
+
+  const unsubTurn = api.onAgentTurnEvent?.((ev) => {
+    if (!paneActive || !ev || ev.agentSessionId !== agentSessionId) return;
+    if (ev.type === 'user') live.onPersistedMessage(ev.message);
+    else if (ev.type === 'assistant_start') live.startAssistant();
+    else if (ev.type === 'assistant_delta') live.appendDelta(ev.text);
+    else if (ev.type === 'message') live.onPersistedMessage(ev.message);
+    else if (ev.type === 'done') live.onDone();
+    else if (ev.type === 'error') {
+      live.onDone();
+      showToast(ev.error || 'Agent 出错', 'error');
+    }
   });
 
   async function findBoundAgentSession() {
@@ -282,11 +585,14 @@ function createSessionAgentPanel(sshSessionId, getServerId, deps) {
     sending = true;
     sendBtn.disabled = true;
     inputEl.value = '';
+    live.appendUserOptimistic(text);
+    live.startAssistant();
 
     try {
       await api.agentSend({ agentSessionId, userText: text });
-      await renderMessages();
+      live.onDone();
     } catch (err) {
+      live.onDone();
       showToast(`发送失败: ${err.message}`, 'error');
       try {
         await api.agentAppendMessage(agentSessionId, {
@@ -323,7 +629,9 @@ function createSessionAgentPanel(sshSessionId, getServerId, deps) {
 
   function destroy() {
     deactivate();
+    live.reset();
     unsubConfirm();
+    unsubTurn?.();
   }
 
   panel.querySelector('[data-action="open-sidebar"]')?.addEventListener('click', async () => {
@@ -378,6 +686,7 @@ function createAgentModule(deps) {
   let savedClusters = [];
   let activeSessionId = null;
   let sending = false;
+  const live = createLiveTurnUi(() => els.messages);
 
   const confirm = createConfirmController({
     confirmEl: els.confirmBar,
@@ -386,9 +695,24 @@ function createAgentModule(deps) {
     getActiveSessionId: () => activeSessionId,
   });
 
-  const unsubConfirm = confirmBus.subscribe((req) => {
-    if (activeSessionId) confirm.onConfirmRequest(req);
+  const unsubConfirm = confirmBus.subscribe((req) => confirm.onConfirmRequest(req));
+  const unsubTurn = api.onAgentTurnEvent?.((ev) => {
+    if (!ev || ev.agentSessionId !== activeSessionId) return;
+    if (ev.type === 'user') live.onPersistedMessage(ev.message);
+    else if (ev.type === 'assistant_start') live.startAssistant();
+    else if (ev.type === 'assistant_delta') live.appendDelta(ev.text);
+    else if (ev.type === 'message') live.onPersistedMessage(ev.message);
+    else if (ev.type === 'done') {
+      live.onDone();
+      loadSessions();
+    } else if (ev.type === 'error') {
+      live.onDone();
+      showToast(ev.error || 'Agent 出错', 'error');
+    }
   });
+
+  void unsubConfirm;
+  void unsubTurn;
 
   function showWorkbench(show) {
     els.browser?.classList.toggle('hidden', show);
@@ -471,22 +795,15 @@ function createAgentModule(deps) {
     }
     for (const s of sessions) {
       const li = document.createElement('li');
-      li.className = 'browser-card';
-      const preview = s.messageCount ? `${s.messageCount} 条消息` : '空对话';
+      li.className = 'browser-card agent-session-card';
+      const preview = s.messageCount ? `${s.messageCount} 条消息` : '暂无消息';
       li.innerHTML = `
         <div class="browser-card-body">
           <div class="browser-card-title">${escapeHtml(s.title || '新对话')}</div>
           <div class="browser-card-sub">${escapeHtml(preview)}</div>
         </div>
-        <div class="browser-card-actions">
-          <button type="button" class="btn-text" data-action="open">打开</button>
-          <button type="button" class="btn-text" data-action="delete">删除</button>
-        </div>
+        <button type="button" class="browser-card-edit agent-card-delete" data-action="delete" title="删除">×</button>
       `;
-      li.querySelector('[data-action="open"]').addEventListener('click', (e) => {
-        e.stopPropagation();
-        openSession(s.id);
-      });
       li.querySelector('[data-action="delete"]').addEventListener('click', async (e) => {
         e.stopPropagation();
         await deleteSession(s.id);
@@ -613,12 +930,17 @@ function createAgentModule(deps) {
     sending = true;
     if (els.sendBtn) els.sendBtn.disabled = true;
     els.input.value = '';
+    live.appendUserOptimistic(text);
+    live.startAssistant();
 
     try {
       await api.agentSend({ agentSessionId: activeSessionId, userText: text });
-      await renderMessages();
+      live.onDone();
       await loadSessions();
+      const session = await api.agentGetSession(activeSessionId);
+      if (session && els.wbTitle) els.wbTitle.textContent = session.title || '新对话';
     } catch (err) {
+      live.onDone();
       showToast(`发送失败: ${err.message}`, 'error');
       try {
         await api.agentAppendMessage(activeSessionId, {

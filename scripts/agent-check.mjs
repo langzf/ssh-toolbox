@@ -67,6 +67,12 @@ const L8_FILES = [
   'main/agent/tools/k8s-write.js',
   'main/agent/tools/k8s-write.test.js',
   'main/agent/channel-adapter.js',
+  'main/agent/skills/catalog.js',
+  'main/agent/skills/catalog.test.js',
+  'main/agent/skills/loader.js',
+  'main/agent/skills/loader.test.js',
+  'main/agent/tools/skills.js',
+  'main/agent/tools/skills.test.js',
 ];
 
 function checkL6HtmlIds() {
@@ -223,6 +229,10 @@ function checkL8Registry() {
   const src = existsSync(indexPath) ? readFileSync(indexPath, 'utf8') : '';
   if (!src.includes('createK8sWriteTools')) {
     console.error('Missing L8 registry: createK8sWriteTools');
+    process.exit(1);
+  }
+  if (!src.includes('createSkillTools')) {
+    console.error('Missing L8 registry: createSkillTools');
     process.exit(1);
   }
 }
@@ -504,7 +514,10 @@ if (layer === 1) {
     'main/agent/runtime.test.js',
     'main/agent/confirm.test.js',
     'main/agent/tools/k8s-read.test.js',
-    'main/agent/tools/k8s-write.test.js'
+    'main/agent/tools/k8s-write.test.js',
+    'main/agent/skills/catalog.test.js',
+    'main/agent/skills/loader.test.js',
+    'main/agent/tools/skills.test.js'
   );
   console.log('L8 OK');
 } else {

@@ -22,13 +22,21 @@ function riskLabel(level) {
   return '只读';
 }
 
+const TOOL_LABELS = {
+  agent_load_skill: '加载技能',
+  'agent.load_skill': '加载技能',
+  agent_read_skill_resource: '读取技能资料',
+  'agent.read_skill_resource': '读取技能资料',
+};
+
 function renderToolCards(toolCalls) {
   if (!toolCalls?.length) return '';
   const cards = toolCalls
     .map((tc) => {
       const name = tc.function?.name || 'unknown';
+      const label = TOOL_LABELS[name] || name;
       const args = tc.function?.arguments || '{}';
-      return `<details class="agent-tool-card"><summary>🔧 ${escapeHtml(name)}</summary><pre>${escapeHtml(args)}</pre></details>`;
+      return `<details class="agent-tool-card"><summary>🔧 ${escapeHtml(label)}</summary><pre>${escapeHtml(args)}</pre></details>`;
     })
     .join('');
   return `<div class="agent-tool-cards">${cards}</div>`;

@@ -36,6 +36,7 @@
     "bin/",
     "main/",
     "src/",
+    "skills/",
     "docs/",
     "LICENSE",
     "README.md"
@@ -80,6 +81,7 @@
     "files": [
       "main/**/*",
       "src/**/*",
+      "skills/**/*",
       "package.json"
     ]
   }

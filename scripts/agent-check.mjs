@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-import { existsSync, readFileSync } from 'node:fs';
+import { existsSync, readFileSync, readdirSync } from 'node:fs';
 import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import path from 'node:path';
@@ -71,6 +71,8 @@ const L8_FILES = [
   'main/agent/skills/catalog.test.js',
   'main/agent/skills/loader.js',
   'main/agent/skills/loader.test.js',
+  'main/agent/skills/builtin.test.js',
+  'main/agent/tools/registry.test.js',
   'main/agent/tools/skills.js',
   'main/agent/tools/skills.test.js',
 ];
@@ -266,6 +268,21 @@ function checkL8Readme() {
   const missing = required.filter((name) => !src.includes(name));
   if (missing.length) {
     console.error('Missing L8 README Agent section:', missing.join(', '));
+    process.exit(1);
+  }
+}
+
+function checkL8BuiltinSkills() {
+  const skillsRoot = path.join(root, 'skills');
+  if (!existsSync(skillsRoot)) {
+    console.error('Missing skills/ directory');
+    process.exit(1);
+  }
+  const dirs = readdirSync(skillsRoot, { withFileTypes: true })
+    .filter((entry) => entry.isDirectory())
+    .map((entry) => entry.name);
+  if (dirs.length !== 8) {
+    console.error(`Expected 8 built-in skill directories, found ${dirs.length}`);
     process.exit(1);
   }
 }
@@ -507,6 +524,7 @@ if (layer === 1) {
   checkL8K8sExports();
   checkL8Runtime();
   checkL8Readme();
+  checkL8BuiltinSkills();
   runTests(
     'main/agent/llm-client.test.js',
     'main/agent/sessions.test.js',
@@ -515,8 +533,10 @@ if (layer === 1) {
     'main/agent/confirm.test.js',
     'main/agent/tools/k8s-read.test.js',
     'main/agent/tools/k8s-write.test.js',
+    'main/agent/tools/registry.test.js',
     'main/agent/skills/catalog.test.js',
     'main/agent/skills/loader.test.js',
+    'main/agent/skills/builtin.test.js',
     'main/agent/tools/skills.test.js'
   );
   console.log('L8 OK');
